@@ -6,7 +6,7 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 
 
 dag = DAG(
-    dag_id="dag_create_hudi_tables",
+    dag_id="ELT_pipeline_kaggle_dataset",
     default_args={
         "owner": "Soumil Shah",
         "start_date": airflow.utils.dates.days_ago(1)
@@ -23,7 +23,7 @@ start = PythonOperator(
 python_job = SparkSubmitOperator(
     task_id="python_job",
     conn_id="spark-conn",
-    application="jobs/python/hudi_spark_minio.py",
+    application="jobs/python/extract_data.py",
     packages="org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2",
     conf={
         "spark.driver.memory": "4g",  # Adjust as per your requirement

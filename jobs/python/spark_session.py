@@ -39,7 +39,7 @@ def create_spark_session(
         .config('spark.memory.storageFraction', '0.2') \
         .config('spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version', '2') \
         .config("fs.s3a.endpoint", "http://minio:9000/") \
-        .config("fs.s3a.access.key", "admi") \
+        .config("fs.s3a.access.key", "minioadmin") \
         .config("fs.s3a.secret.key", "minioadmin") \
         .config("fs.s3a.path.style.access", "true") \
         .config("fs.s3a.connection.ssl.enabled", "false") \
