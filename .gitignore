@@ -1,0 +1,5 @@
+volumes/
+__pycache__/
+*.log
+logs/
+
