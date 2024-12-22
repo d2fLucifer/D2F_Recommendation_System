@@ -2,4 +2,6 @@ volumes/
 __pycache__/
 *.log
 logs/
-
+.env
+airflow.env
+data/

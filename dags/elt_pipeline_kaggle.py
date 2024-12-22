@@ -14,14 +14,10 @@ dag = DAG(
     schedule_interval="@daily"
 )
 
-start = PythonOperator(
-    task_id="start",
-    python_callable=lambda: print("Jobs started"),
-    dag=dag
-)
 
-python_job = SparkSubmitOperator(
-    task_id="python_job",
+
+extract_data_job = SparkSubmitOperator(
+    task_id="extract_data_job",
     conn_id="spark-conn",
     application="jobs/python/extract_data.py",
     packages="org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2",
@@ -32,11 +28,17 @@ python_job = SparkSubmitOperator(
     },
     dag=dag
 )
-
-end = PythonOperator(
-    task_id="end",
-    python_callable=lambda: print("Jobs completed successfully"),
+load_data_to_minio_job = SparkSubmitOperator(
+    task_id="load_data_to_minio_job",
+    conn_id="spark-conn",
+    application="jobs/python/load_data_to_minio.py",
+    dag=dag
+)
+transform_to_milvus_job = SparkSubmitOperator(
+    task_id="transform_to_milvus_job",
+    conn_id="spark-conn",
+    application="jobs/python/transform_to_milvus.py",
     dag=dag
 )
 
-start >> python_job >> end
+extract_data_job >> load_data_to_minio_job >> transform_to_milvus_job

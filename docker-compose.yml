@@ -4,6 +4,7 @@ x-spark-common: &spark-common
   image: bitnami/spark:3.4.0
   volumes:
     - ./jobs:/opt/bitnami/spark/jobs
+    - ./data:/opt/bitnami/spark/data
   networks:
     - airflow-spark-network
 
@@ -13,10 +14,14 @@ x-airflow-common: &airflow-common
     dockerfile: Dockerfile
   env_file:
     - airflow.env
+    - .env
+  environment:
+    - MONGODB_URI=${MONGODB_URI} 
   volumes:
     - ./jobs:/opt/airflow/jobs
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
+    - ./data:/opt/airflow/data
     - airflow-db-data:/var/lib/postgresql/data  # Persistent metadata storage
   depends_on:
     - postgres
@@ -64,7 +69,7 @@ services:
   scheduler:
     <<: *airflow-common
     command: bash -c "airflow db migrate && airflow users create --username admin --firstname Yusuf --lastname Ganiyu --role Admin --email airscholar@gmail.com --password admin && airflow scheduler"
-
+ 
   etcd:
     container_name: milvus-etcd
     image: quay.io/coreos/etcd:v3.5.5
@@ -131,7 +136,8 @@ services:
     networks:
       - airflow-spark-network
   
-  
+ 
+
 
   
 
