@@ -1,16 +1,15 @@
-from pyspark.sql import SparkSession
- 
-# Initialize Spark session
-spark_session = SparkSession.builder.appName("Extract Data").getOrCreate()
+from spark_session import create_spark_session
+
+def main():
+    spark_session = create_spark_session("Extract Data")
     
-try:
-        # Read CSV from local filesystem (driver node)
-        df = spark_session.read.csv("/opt/airflow/data/2019-Nov.csv", header=True, inferSchema=True)
-        
-        # Display the first 50 rows
-        df.show(50)
-except Exception as e:
-        print(f"Error reading CSV file: {e}")
-finally:
-        # Stop Spark session
-        spark_session.stop()
+    # Read data from S3
+    df = spark_session.read.csv("s3a://recommendation/raw/2019-Nov.csv", header=True, inferSchema=True)
+    
+    # Write data to a persistent S3 location
+    df.write.mode("append").parquet("s3a://recommendation/processed/my_table/")
+    
+    spark_session.stop()
+
+if __name__ == "__main__":
+    main()
