@@ -120,6 +120,29 @@ configs:
       log_level: INFO      
 
   
+  attu:
+    container_name: attu
+    image: zilliz/attu:v2.2.5
+    environment:
+      MILVUS_URL: 127.0.0.1:19530
+    ports:
+      - "8000:3000"
+    depends_on:
+      - "standalone"
+    networks:
+      - airflow-spark-network
+  
+  # milvus-cli:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.milvus-cli
+  #   networks:
+  #     - airflow-spark-network
+  #   depends_on:
+  #     - standalone
+  #   entrypoint: ["milvus-cli"]
+
+  
  
 
 
