@@ -5,3 +5,7 @@ logs/
 .env
 airflow.env
 data/
+.venv/
+qdrant_data/
+test.py
+

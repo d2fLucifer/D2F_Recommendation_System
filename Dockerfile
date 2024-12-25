@@ -10,6 +10,7 @@ ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64
 
 USER airflow
 
-RUN pip install apache-airflow apache-airflow-providers-apache-spark pyspark==3.4.0 Faker pymongo pymilvus
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 RUN airflow db init
 RUN airflow db upgrade
