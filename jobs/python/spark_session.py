@@ -5,22 +5,34 @@ def create_spark_session(
         app_name="HudiApp", 
         hudi_version='0.14.0', 
         spark_version='3.4', 
-        additional_configs=None
+        additional_configs=None,
+        mongo_connector_version='10.1.1'  # Specify the MongoDB Spark Connector version
     ):
     """
-    Create and configure a SparkSession with Hudi and S3 support.
+    Create and configure a SparkSession with Hudi, S3, and MongoDB support.
     
     Parameters:
     - app_name: Name of the Spark application.
     - hudi_version: Version of Hudi to use.
     - spark_version: Version of Spark.
     - additional_configs: Dictionary for additional Spark configurations.
+    - mongo_connector_version: Version of MongoDB Spark Connector to use.
     
     Returns:
     - Configured SparkSession.
     """
-    # Set the required PySpark submit arguments for Hudi and Hadoop AWS
-    submit_args = f"--packages org.apache.hudi:hudi-spark{spark_version}-bundle_2.12:{hudi_version},org.apache.hadoop:hadoop-aws:3.3.2 pyspark-shell"
+    
+    
+    # Define the Hudi and Hadoop AWS packages
+    hudi_package = f"org.apache.hudi:hudi-spark{spark_version}-bundle_2.12:{hudi_version}"
+    hadoop_aws_package = "org.apache.hadoop:hadoop-aws:3.3.2"
+    mongo_package = "org.mongodb.spark:mongo-spark-connector_2.12:3.0.1"
+    
+    # Combine all packages
+    all_packages = f"{hudi_package},{hadoop_aws_package},{mongo_package}"
+    
+    # Set the required PySpark submit arguments for Hudi, Hadoop AWS, and MongoDB Spark Connector
+    submit_args = f"--packages {all_packages} pyspark-shell"
     os.environ["PYSPARK_SUBMIT_ARGS"] = submit_args
 
     # Create Spark session with base configurations
@@ -44,13 +56,15 @@ def create_spark_session(
         .config("fs.s3a.path.style.access", "true") \
         .config("fs.s3a.connection.ssl.enabled", "false") \
         .config("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
-        .config("fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider")
-
+        .config("fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
+        .config("spark.mongodb.output.uri", "mongodb://root:example@mongo:27017/recommendation_system?authSource=admin")\
+        .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:3.0.1") \
+    
     # Apply additional configurations if provided
     if additional_configs:
         for key, value in additional_configs.items():
             spark_builder = spark_builder.config(key, value)
-
+    
     spark = spark_builder.getOrCreate()
 
     # Additional Hadoop settings for improved performance

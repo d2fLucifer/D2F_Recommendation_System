@@ -1,0 +1,33 @@
+# Base image
+FROM mongo:latest
+
+# Set working directory (optional, not needed for MongoDB specifically)
+WORKDIR /app
+
+# Copy the init-mongo.js script into the appropriate directory for MongoDB initialization
+COPY ./init-mongo.js /docker-entrypoint-initdb.d/init-mongo.js
+
+
+# Copy the CSV data
+COPY ./data /data
+
+
+# Set environment variables
+ENV MONGO_INITDB_ROOT_USERNAME=root
+ENV MONGO_INITDB_ROOT_PASSWORD=example
+ENV MONGO_INITDB_DATABASE=recommendation_system
+
+# Expose the MongoDB default port
+EXPOSE 27017
+
+# Install additional tools and packages
+RUN apt-get update && apt-get install -y \
+    wget gnupg \
+    && wget -qO - https://pgp.mongodb.com/server-6.0.asc | apt-key add - \
+    && echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/debian buster/mongodb-org/6.0 main" > /etc/apt/sources.list.d/mongodb-org-6.0.list \
+    && apt-get update && apt-get install -y mongodb-mongosh \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Use the default MongoDB CMD instruction
+CMD ["mongod"]

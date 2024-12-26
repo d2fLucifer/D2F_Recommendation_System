@@ -1,5 +1,3 @@
-version: '3'
-
 x-spark-common: &spark-common
   image: bitnami/spark:3.4.0
   volumes:
@@ -16,13 +14,13 @@ x-airflow-common: &airflow-common
     - airflow.env
     - .env
   environment:
-    - MONGODB_URI=${MONGODB_URI} 
+    - MONGODB_URI=${MONGODB_URI}
   volumes:
     - ./jobs:/opt/airflow/jobs
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./data:/opt/airflow/data
-    - airflow-db-data:/var/lib/postgresql/data  # Persistent metadata storage
+    - airflow-db-data:/var/lib/postgresql/data # Persistent metadata storage
   depends_on:
     - postgres
   networks:
@@ -54,7 +52,7 @@ services:
       - POSTGRES_PASSWORD=airflow
       - POSTGRES_DB=airflow
     volumes:
-      - postgres-data:/var/lib/postgresql/data  # Persistent storage for Postgres
+      - postgres-data:/var/lib/postgresql/data # Persistent storage for Postgres
     networks:
       - airflow-spark-network
 
@@ -69,8 +67,6 @@ services:
   scheduler:
     <<: *airflow-common
     command: bash -c "airflow db migrate && airflow users create --username admin --firstname Yusuf --lastname Ganiyu --role Admin --email airscholar@gmail.com --password admin && airflow scheduler"
- 
-
 
   minio:
     container_name: milvus-minio
@@ -92,9 +88,20 @@ services:
     networks:
       - airflow-spark-network
 
+  jupyter:
+    image: jupyter/base-notebook:latest
+    container_name: jupyter-notebook
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+    command: start-notebook.sh
+    depends_on:
+      qdrant:
+        condition: service_healthy
 
-  
-  
   qdrant:
     image: qdrant/qdrant:latest
     restart: always
@@ -111,46 +118,40 @@ services:
         target: /qdrant/config/production.yaml
     volumes:
       - ./qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  mongo:
+    image: custom-mongo
+    build:
+      context: .
+      dockerfile: Dockerfile.mongo
+    container_name: recommendation_mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
     networks:
       - airflow-spark-network
+    
+
+
+volumes:
+  postgres-data: # Volume for Postgres
+  airflow-db-data: # Volume for Airflow metadata
+  mongo_data: # Volume for MongoDB
 
 configs:
   qdrant_config:
     content: |
-      log_level: INFO      
-
-  
-  attu:
-    container_name: attu
-    image: zilliz/attu:v2.2.5
-    environment:
-      MILVUS_URL: 127.0.0.1:19530
-    ports:
-      - "8000:3000"
-    depends_on:
-      - "standalone"
-    networks:
-      - airflow-spark-network
-  
-  # milvus-cli:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.milvus-cli
-  #   networks:
-  #     - airflow-spark-network
-  #   depends_on:
-  #     - standalone
-  #   entrypoint: ["milvus-cli"]
-
-  
- 
-
-
-  
+      log_level: INFO
 
 networks:
   airflow-spark-network:
-
-volumes:
-  postgres-data:  # Volume for Postgres
-  airflow-db-data:  # Volume for Airflow metadata
+    external: true
+    driver: bridge

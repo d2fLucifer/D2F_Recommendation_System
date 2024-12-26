@@ -6,3 +6,4 @@ pymongo
 pymilvus 
 qdrant-client
 apache-airflow-providers-qdrant
+fastembed
