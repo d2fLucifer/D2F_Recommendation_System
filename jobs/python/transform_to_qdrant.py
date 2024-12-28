@@ -1,114 +1,119 @@
-import asyncio
-import numpy as np
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import lit, col, mean, stddev, collect_list, struct
-from qdrant_client import QdrantClient
-from qdrant_client.models import PointStruct, VectorParams, Distance
-from fastembed import TextEmbedding
+from pyspark.sql.functions import (
+    to_timestamp, when, sum as spark_sum, lag, unix_timestamp, col
+)
+from pyspark.sql.window import Window
+from spark_session import create_spark_session
 
-def to_sparse_vector(features, size):
-    vector = np.zeros(size)
-    for f in features:
-        vector[int(f.product_id)] = f.normalized_interaction
-    return vector.tolist()
+# Initialize Spark Session with MongoDB Connector
+mongo_uri = "mongodb://root:example@mongo:27017/admin"  # Update with your MongoDB URI
+db_name = "recommendation_system"
+collection_name = "user_behavior"
 
-def main():
-    # Initialize Spark session
-    spark = SparkSession.builder.appName("transform_to_qdrant").getOrCreate()
+spark = create_spark_session("Transform to Qdrant")
 
-    # Read data from the persistent S3 location
-    df = spark.read.parquet("s3a://recommendation/transformed/user-behavior.csv")
+# Load data from MongoDB
+df = spark.read.format("mongo") \
+    .option("uri", mongo_uri) \
+    .option("database", db_name) \
+    .option("collection", collection_name) \
+    .load()
 
-    # Data preprocessing
-    df = df.dropna()
-    df = df.filter(df.event_type.isin('purchase', 'view'))
+df.show(10)
+df = df.repartition(200)
 
-    interaction_df = df.withColumn("interaction", lit(1)) \
-        .groupBy("user_id", "product_id") \
-        .sum("interaction") \
-        .withColumnRenamed("sum(interaction)", "interaction_count")
+# Parse event_time as timestamp with explicit format if necessary
+# Adjust the format string based on your actual data
+df = df.withColumn("event_time", to_timestamp("event_time", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"))
 
-    mean_interaction = interaction_df.select(mean(col("interaction_count"))).first()[0]
-    stddev_interaction = interaction_df.select(stddev(col("interaction_count"))).first()[0]
+# Feature Engineering: Initialize count columns
+df = df.withColumn("view_count", when(col("event_type") == "view", 1).otherwise(0)) \
+       .withColumn("cart_count", when(col("event_type") == "cart", 1).otherwise(0)) \
+       .withColumn("purchase_count", when(col("event_type") == "purchase", 1).otherwise(0))
 
-    interaction_df = interaction_df.withColumn(
-        "normalized_interaction",
-        (col("interaction_count") - mean_interaction) / stddev_interaction
-    )
+# Compute total aggregates per user_session
+df_totals = df.groupBy("user_session") \
+              .agg(
+                  spark_sum("view_count").alias("total_views"),
+                  spark_sum("cart_count").alias("total_carts"),
+                  spark_sum("purchase_count").alias("total_purchases")
+              )
 
-    product_count = df.select("product_id").distinct().count()
+# Compute product-level aggregates per user_session, product_id, user_id
+df_product = df.groupBy("user_session", "product_id", "user_id") \
+               .agg(
+                   spark_sum("view_count").alias("product_views"),
+                   spark_sum("cart_count").alias("product_carts"),
+                   spark_sum("purchase_count").alias("product_purchases")
+               )
 
-    user_vectors = interaction_df.groupBy("user_id").agg(
-        collect_list(struct("product_id", "normalized_interaction")).alias("features")
-    )
+# Join the two DataFrames on user_session
+df_features = df_product.join(df_totals, on="user_session", how="left")
 
-    user_vectors = user_vectors.rdd.map(lambda row: (
-        row.user_id,
-        to_sparse_vector(row.features, product_count)
-    )).toDF(["user_id", "vector"])
+# Compute F1, F2, F3 with division by zero handling
+df_features = df_features.withColumn(
+    "F1",
+    when(col("total_views") != 0, col("product_views") / col("total_views")).otherwise(0)
+).withColumn(
+    "F2",
+    when(col("total_carts") != 0, col("product_carts") / col("total_carts")).otherwise(0)
+).withColumn(
+    "F3",
+    when(col("total_purchases") != 0, col("product_purchases") / col("total_purchases")).otherwise(0)
+)
 
-    # Initialize Qdrant client
-    client = QdrantClient(host="qdrant", port=6333)
+# Feature Engineering for F4 (Time Spent)
+window_order = Window.partitionBy("user_session").orderBy("event_time")
 
-    # Set the embedding model
-    embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+df_time = df.withColumn("prev_event_time", lag("event_time").over(window_order)) \
+           .withColumn(
+               "time_spent_seconds",
+               unix_timestamp("event_time") - unix_timestamp("prev_event_time")
+           ) \
+           .na.fill(0, subset=["time_spent_seconds"]) \
+           .withColumn("time_spent", col("time_spent_seconds").cast("double"))
 
-    # Recreate collection with the specified vector parameters
-    client.recreate_collection(
-        collection_name='user_preferences',
-        vectors_config=VectorParams(size=product_count, distance=Distance.COSINE)
-    )
+# Aggregate time spent per product
+df_time_agg = df_time.groupBy("user_session", "product_id", "user_id") \
+                     .agg(
+                         spark_sum("time_spent").alias("product_time_spent")
+                     )
 
-    # Batch upsert points to Qdrant
-    batch_size = 1000
-    points = [
-        PointStruct(
-            id=int(row.user_id),
-            vector=row.vector,
-            payload={'user_id': row.user_id}
-        )
-        for row in user_vectors.collect()
-    ]
+# Aggregate total time spent per user_session
+df_total_time = df_time.groupBy("user_session") \
+                       .agg(
+                           spark_sum("time_spent").alias("total_time_spent")
+                       )
 
-    for i in range(0, len(points), batch_size):
-        client.upsert(
-            collection_name='user_preferences',
-            points=points[i:i + batch_size]
-        )
+# Join time aggregates with df_features
+df_features = df_features.join(df_time_agg, on=["user_session", "product_id", "user_id"], how="left") \
+                         .join(df_total_time, on="user_session", how="left")
 
-    # Example user preferences
-    user_preferences = {'product_id_1': 1, 'product_id_2': -1}  # Replace with actual data
-    user_vector = np.zeros(product_count)
-    for product_id, rating in user_preferences.items():
-        product_idx = int(product_id)  # Ensure product_id is an integer
-        user_vector[product_idx] = rating
+# Compute F4 with division by zero handling
+df_features = df_features.withColumn(
+    "F4",
+    when(col("total_time_spent") != 0, col("product_time_spent") / col("total_time_spent")).otherwise(0)
+)
 
-    # Generate embedding for the user vector
-    user_vector_embedding = embedding_model.embed([user_vector.tolist()])[0]
+# Define weights
+w1 = 0.1
+w2 = 0.25
+w3 = 0.45
+w4 = 0.2
 
-    # Search for similar users
-    search_result = client.search(
-        collection_name='user_preferences',
-        query_vector=user_vector_embedding,
-        limit=10
-    )
+# Compute score
+df_features = df_features.withColumn(
+    "score",
+    w1 * col("F1") + w2 * col("F2") + w3 * col("F3") + w4 * col("F4")
+)
 
-    # Collect recommended items
-    recommended_items = set()
-    for result in search_result:
-        similar_user_id = result.payload['user_id']
-        similar_user_items = df.filter(df.user_id == similar_user_id).select("product_id").rdd.flatMap(lambda x: x).collect()
-        recommended_items.update(similar_user_items)
+# Handle possible nulls in score
+df_features = df_features.fillna({'score': 0})
 
-    # Exclude items the user has already interacted with
-    user_id = 123  # Replace with the actual user_id
-    user_items = df.filter(df.user_id == user_id).select("product_id").rdd.flatMap(lambda x: x).collect()
-    recommended_items = recommended_items - set(user_items)
+# Select final columns
+final_df = df_features.select("user_id", "product_id", "score")
 
-    print(f"Recommended items for user {user_id}: {recommended_items}")
+final_df.show(10, truncate=False)
 
-    # Close the Qdrant client connection
-    client.close()
-
-if __name__ == "__main__":
-    main()
+# Stop the Spark session
+spark.stop()

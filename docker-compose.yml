@@ -88,19 +88,19 @@ services:
     networks:
       - airflow-spark-network
 
-  jupyter:
-    image: jupyter/base-notebook:latest
-    container_name: jupyter-notebook
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./notebooks:/home/jovyan/work
-    environment:
-      JUPYTER_ENABLE_LAB: "yes"
-    command: start-notebook.sh
-    depends_on:
-      qdrant:
-        condition: service_healthy
+  # jupyter:
+  #   image: jupyter/base-notebook:latest
+  #   container_name: jupyter-notebook
+  #   ports:
+  #     - "8888:8888"
+  #   volumes:
+  #     - ./notebooks:/home/jovyan/work
+  #   environment:
+  #     JUPYTER_ENABLE_LAB: "yes"
+  #   command: start-notebook.sh
+  #   depends_on:
+  #     qdrant:
+  #       condition: service_healthy
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -124,6 +124,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    networks:
+      - airflow-spark-network
 
   mongo:
     image: custom-mongo

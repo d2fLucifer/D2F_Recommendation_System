@@ -20,8 +20,8 @@ dag = DAG(
 transform_to_qdrant_job = SparkSubmitOperator(
     task_id="transform_to_qdrant_job",
     conn_id="spark-conn",
+    packages="org.mongodb.spark:mongo-spark-connector_2.12:3.0.1,org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2",
     application="jobs/python/transform_to_qdrant.py",
-    packages="org.apache.hadoop:hadoop-aws:3.3.2",  # Corrected
     conf={
         "spark.driver.memory": "4g",
         "spark.executor.memory": "4g",

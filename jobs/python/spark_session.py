@@ -6,7 +6,7 @@ def create_spark_session(
         hudi_version='0.14.0', 
         spark_version='3.4', 
         additional_configs=None,
-        mongo_connector_version='10.1.1'  # Specify the MongoDB Spark Connector version
+        mongo_connector_version='10.1.1'  # Updated to a compatible version
     ):
     """
     Create and configure a SparkSession with Hudi, S3, and MongoDB support.
@@ -22,19 +22,18 @@ def create_spark_session(
     - Configured SparkSession.
     """
     
-    
     # Define the Hudi and Hadoop AWS packages
     hudi_package = f"org.apache.hudi:hudi-spark{spark_version}-bundle_2.12:{hudi_version}"
     hadoop_aws_package = "org.apache.hadoop:hadoop-aws:3.3.2"
-    mongo_package = "org.mongodb.spark:mongo-spark-connector_2.12:3.0.1"
+    mongo_package = f"org.mongodb.spark:mongo-spark-connector_2.12:{mongo_connector_version}"
     
     # Combine all packages
     all_packages = f"{hudi_package},{hadoop_aws_package},{mongo_package}"
     
     # Set the required PySpark submit arguments for Hudi, Hadoop AWS, and MongoDB Spark Connector
-    submit_args = f"--packages {all_packages} pyspark-shell"
-    os.environ["PYSPARK_SUBMIT_ARGS"] = submit_args
-
+    # Removed PYSPARK_SUBMIT_ARGS to avoid redundancy
+    # os.environ["PYSPARK_SUBMIT_ARGS"] = f"--packages {all_packages} pyspark-shell"
+    
     # Create Spark session with base configurations
     spark_builder = SparkSession.builder \
         .appName(app_name) \
@@ -58,7 +57,9 @@ def create_spark_session(
         .config("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
         .config("spark.mongodb.output.uri", "mongodb://root:example@mongo:27017/recommendation_system?authSource=admin")\
-        .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:3.0.1") \
+        .config("spark.jars", "/jars/spark-2.3.2.jar") \
+        .master("local[*]")  \
+        .config("spark.jars.packages", all_packages)  # Use all_packages here
     
     # Apply additional configurations if provided
     if additional_configs:
