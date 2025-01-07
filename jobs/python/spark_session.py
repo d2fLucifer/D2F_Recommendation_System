@@ -43,8 +43,8 @@ def create_spark_session(
         .config('spark.sql.adaptive.enabled', 'true') \
         .config('spark.sql.adaptive.shuffle.targetPostShuffleInputSize', '64m') \
         .config('spark.sql.adaptive.coalescePartitions.enabled', 'true') \
-        .config('spark.executor.memory', '4g') \
-        .config('spark.executor.cores', '4') \
+        .config('spark.executor.memory', '8g') \
+        .config('spark.executor.cores', '8') \
         .config('spark.driver.memory', '4g') \
         .config('spark.memory.fraction', '0.8') \
         .config('spark.memory.storageFraction', '0.2') \
@@ -57,7 +57,7 @@ def create_spark_session(
         .config("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
         .config("spark.mongodb.output.uri", "mongodb://root:example@mongo:27017/recommendation_system?authSource=admin")\
-        .config("spark.jars", "/jars/spark-2.3.2.jar") \
+        .config("spark.jars", "/usr/local/airflow/spark/jars/qdrant-spark-2.3.2.jar") \
         .master("local[*]")  \
         .config("spark.jars.packages", all_packages)  # Use all_packages here
     
