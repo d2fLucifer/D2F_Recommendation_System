@@ -43,9 +43,10 @@ def create_spark_session(
         .config('spark.sql.adaptive.enabled', 'true') \
         .config('spark.sql.adaptive.shuffle.targetPostShuffleInputSize', '64m') \
         .config('spark.sql.adaptive.coalescePartitions.enabled', 'true') \
-        .config('spark.executor.memory', '8g') \
-        .config('spark.executor.cores', '8') \
+        .config('spark.executor.memory', '4g') \
+        .config('spark.executor.cores', '4') \
         .config('spark.driver.memory', '4g') \
+        .config("spark.sql.broadcastTimeout", "6000s")  \
         .config('spark.memory.fraction', '0.8') \
         .config('spark.memory.storageFraction', '0.2') \
         .config('spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version', '2') \
