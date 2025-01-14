@@ -198,54 +198,22 @@ def main():
     )
     logger.info("Qdrant collection created or recreated.")
 
-    # Select a sample of data to upload
-    sample_data = final_df.limit(1000000)
+    qdrant_options = {
+    "qdrant_url": "http://qdrant:6334",  # Replace with your Qdrant gRPC URL
+    "collection_name": "recommendation_collection",
+    "schema": final_df.schema.json(),
+    "embedding_field": "vector",
+    "batch_size": 64,          # Optional: adjust based on your performance needs
+    "retries": 10,              # Optional: number of upload retries
+    "api_key": None            # Optional: if your Qdrant instance requires an API key
+}
+    final_df.write \
+    .format("io.qdrant.spark.Qdrant") \
+    .options(**qdrant_options) \
+    .mode("append") \
+    .save()
 
-    # Define batch size
-    batch_size = 1000
-
-    # Calculate total number of rows
-    total_rows = sample_data.count()
-    num_batches = (total_rows // batch_size) + (1 if total_rows % batch_size != 0 else 0)
-
-    logger.info(f"Total rows to upload: {total_rows}")
-    logger.info(f"Number of batches: {num_batches}")
-
-    for batch_num in range(num_batches):
-        # Calculate the offset
-        offset = batch_num * batch_size
-
-        # Retrieve the batch using limit and offset
-        batch_df = sample_data.limit(offset + batch_size).subtract(sample_data.limit(offset))
-
-        # Collect the batch rows
-        batch_rows = batch_df.collect()
-
-        # Prepare payload for Qdrant
-        payload = []
-        for row in batch_rows:
-            vector = row['vector'].toArray().tolist() if isinstance(row['vector'], SparseVector) else row['vector']
-            payload.append({
-                "id": str(uuid.uuid4()),
-                "vector": vector,
-                "payload": {
-                    "user_id": row['user_id'],
-                    "product_id": row['product_id'],
-                    "name": row['name'],
-                    "score": row['score']
-                }
-            })
-
-        try:
-            # Upload the batch to Qdrant
-            client.upsert(
-                collection_name=QDRANT_COLLECTION_NAME,
-                points=payload
-            )
-            logger.info(f"Batch {batch_num + 1}/{num_batches} uploaded successfully.")
-        except Exception as e:
-            logger.error(f"Error uploading batch {batch_num + 1}: {e}")
-            # Optional: Implement retry logic or other error handling here
+   
 
     # ----------------------------------------------------------------------
     # 2.9 Stop Spark

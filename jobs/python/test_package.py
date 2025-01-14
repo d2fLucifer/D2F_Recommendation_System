@@ -33,16 +33,11 @@ collection_name = "test_collection"
 client = QdrantClient(url=qdrant_url)
 
 try:
-    existing_collections = client.get_collections().collections
-    if collection_name not in [col.name for col in existing_collections]:
-        print(f"❌ Collection `{collection_name}` does not exist. Creating a new collection...")
-        client.recreate_collection(
-            collection_name=collection_name,
-            vectors_config=VectorParams(size=3, distance=Distance.COSINE),
-        )
-        print(f"✅ Collection `{collection_name}` has been successfully created.")
-    else:
-        print(f"✅ Collection `{collection_name}` already exists.")
+    client.recreate_collection(
+        collection_name=collection_name,
+        vectors_config=VectorParams(size=3, distance=Distance.COSINE),
+    )
+    print(f"✅ Collection `{collection_name}` has been successfully created.")
 except Exception as e:
     print(f"❌ Error checking or creating collection: {e}")
     spark.stop()
@@ -53,12 +48,15 @@ options = {
     "qdrant_url": "http://qdrant:6334",  # Ensure this is the correct gRPC URL
     "collection_name": collection_name,
     "schema": df.schema.json(),
-    "vector_fields": "embedding",  # Updated to use 'vector_fields' as per latest connector
-    "vector_names": "default"  # Specify the vector name if applicable
+    "embedding_field": "embedding",  # Use 'vector_field' instead of 'vector_fields'
 }
 
 # Step 6: Write DataFrame to Qdrant
 try:
+    # Debugging: Print schema and data
+    df.printSchema()
+    df.show(truncate=False)
+
     df.write.format("io.qdrant.spark.Qdrant") \
         .options(**options) \
         .mode("append") \
