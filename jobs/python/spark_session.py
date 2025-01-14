@@ -46,6 +46,7 @@ def create_spark_session(
         .config('spark.executor.memory', '4g') \
         .config('spark.executor.cores', '4') \
         .config('spark.driver.memory', '4g') \
+        .config("spark.sql.broadcastTimeout", "6000s")  \
         .config('spark.memory.fraction', '0.8') \
         .config('spark.memory.storageFraction', '0.2') \
         .config('spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version', '2') \
