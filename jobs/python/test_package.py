@@ -1,94 +1,71 @@
-from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct
-from sentence_transformers import SentenceTransformer
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType, StructField, StringType, ArrayType, FloatType
 import uuid
-import requests
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance
 
-# Configuration
-qdrant_host = "qdrant"  # Replace with your Qdrant host if different
-qdrant_http_port = 6333  # HTTP port
-collection_name = "test_collection"
+# Step 1: Create a SparkSession
+spark = SparkSession.builder \
+    .config("spark.jars", "/usr/local/airflow/spark/jars/qdrant-spark-2.3.2.jar") \
+    .appName("QdrantIntegration") \
+    .getOrCreate()
 
-# Initialize Qdrant Client using HTTP
-client = QdrantClient(host=qdrant_host, port=qdrant_http_port, prefer_grpc=False)
+# Step 2: Define Schema for the DataFrame
+schema = StructType([
+    StructField("id", StringType(), True),
+    StructField("name", StringType(), True),
+    StructField("embedding", ArrayType(FloatType()), True)
+])
 
-# 1. Test Qdrant Connectivity using HTTP
-try:
-    response = requests.get(f"http://{qdrant_host}:{qdrant_http_port}/collections")
-    if response.status_code == 200:
-        print("✅ Successfully connected to Qdrant (HTTP).")
-    else:
-        print(f"❌ Failed to connect to Qdrant (HTTP): {response.text}")
-        exit(1)
-except Exception as e:
-    print(f"❌ Error connecting to Qdrant (HTTP): {e}")
-    exit(1)
-
-# 2. Define Vector Configuration
-# Determine the size based on the embedding model you choose
-embedding_model_name = "sentence-transformers/all-MiniLM-L6-v2"
-model = SentenceTransformer(embedding_model_name)
-vector_size = model.get_sentence_embedding_dimension()
-
-vectors_config = VectorParams(size=vector_size, distance=Distance.COSINE)
-
-# 3. Create or Recreate Collection
-try:
-    # This will delete the collection if it exists and create a new one
-    client.recreate_collection(
-        collection_name=collection_name,
-        vectors_config=vectors_config
-    )
-    print(f"✅ Collection '{collection_name}' is ready.")
-except Exception as e:
-    print(f"❌ Failed to create collection '{collection_name}': {e}")
-    exit(1)
-
-# 4. Prepare Data Points
-names = ["Alice", "Bob", "Charlie"]
-
-# Generate embeddings for each name
-embeddings = model.encode(names)
-
-# Create data points with embeddings
-data = []
-for name, vector in zip(names, embeddings):
-    point = {
-        "id": str(uuid.uuid4()),
-        "payload": {"name": name},
-        "vector": vector.tolist()  # Convert numpy array to list
-    }
-    print("vector", vector)
-    data.append(point)
-
-# Convert data to Qdrant PointStruct format
-points = [
-    PointStruct(id=point["id"], vector=point["vector"], payload=point["payload"])
-    for point in data
+# Step 3: Generate data with UUID
+data = [
+    (str(uuid.uuid4()), "Alice", [0.1, 0.2, 0.3]),
+    (str(uuid.uuid4()), "Bob", [0.4, 0.5, 0.6]),
+    (str(uuid.uuid4()), "Charlie", [0.7, 0.8, 0.9])
 ]
 
-# 5. Insert Points into Qdrant
+df = spark.createDataFrame(data, schema)
+
+# Step 4: Initialize QdrantClient and Create Collection if not exists
+qdrant_url = "http://qdrant:6333"  # Replace if necessary
+collection_name = "test_collection"
+
+client = QdrantClient(url=qdrant_url)
+
 try:
-    client.upsert(collection_name=collection_name, points=points)
-    print("✅ Points successfully inserted into Qdrant.")
-except Exception as e:
-    print(f"❌ Error inserting points into Qdrant: {e}")
-    exit(1)
-
-# 6. Verify Data Insertion
-try:
-    collection_info = client.get_collection(collection_name=collection_name)
-    print(f"🔍 Collection info: {collection_info}")
-
-    # Retrieve all points (assuming small dataset; for larger datasets, use pagination)
-    retrieved_points, _ = client.scroll(collection_name=collection_name, limit=10)
-
-    if retrieved_points:
-        print("✅ Retrieved Points:")
-        for point in retrieved_points:
-            print(f"ID: {point.id}, Payload: {point.payload}, Vector: {point.vector}")
+    existing_collections = client.get_collections().collections
+    if collection_name not in [col.name for col in existing_collections]:
+        print(f"❌ Collection `{collection_name}` does not exist. Creating a new collection...")
+        client.recreate_collection(
+            collection_name=collection_name,
+            vectors_config=VectorParams(size=3, distance=Distance.COSINE),
+        )
+        print(f"✅ Collection `{collection_name}` has been successfully created.")
     else:
-        print("⚠️ No points retrieved from the collection.")
+        print(f"✅ Collection `{collection_name}` already exists.")
 except Exception as e:
-    print(f"❌ Error retrieving data from Qdrant: {e}")
-    exit(1)
+    print(f"❌ Error checking or creating collection: {e}")
+    spark.stop()
+    exit()
+
+# Step 5: Configure connection options for Qdrant
+options = {
+    "qdrant_url": "http://qdrant:6334",  # Ensure this is the correct gRPC URL
+    "collection_name": collection_name,
+    "schema": df.schema.json(),
+    "vector_fields": "embedding",  # Updated to use 'vector_fields' as per latest connector
+    "vector_names": "default"  # Specify the vector name if applicable
+}
+
+# Step 6: Write DataFrame to Qdrant
+try:
+    df.write.format("io.qdrant.spark.Qdrant") \
+        .options(**options) \
+        .mode("append") \
+        .save()
+    print("✅ Data successfully inserted into Qdrant.")
+except Exception as e:
+    print(f"❌ Error inserting data into Qdrant: {e}")
+
+# Step 7: Stop Spark Session
+spark.stop()

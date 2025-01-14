@@ -200,27 +200,7 @@ def main():
     logger.info("Qdrant collection created or recreated.")
 
   
-    # # # Limit the data to 1000 rows for testing
-    # sample_data = final_df.limit(1000000).collect()
-    sample_data = final_df.limit(1000).collect()
-    # qdrant_options = {
-    # "qdrant_url": "http://localhost:6334",  # Replace with your Qdrant gRPC URL
-    # "collection_name": "recommendation_collection",
-    # "schema": final_df.schema.json(),
-    # "vector_fields": "vector",  # Column in your DataFrame containing vector data
-    # "vector_names": "name_vector",  # Name of the vector in the Qdrant collection
-    # # Optional parameters:
-    # # "id_field": "id",  # Column containing unique IDs for Qdrant points
-    # # "batch_size": "64",  # Number of records per batch during upload
-    # # "retries": "3",  # Number of retry attempts for failed uploads
-    # # "api_key": "your_api_key",  # If authentication is required
-    # }
-    # final_df.write \
-    # .format("io.qdrant.spark") \
-    # .options(**qdrant_options) \
-    # .mode("append") \
-    # .save()
-
+    
 
 
 
