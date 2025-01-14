@@ -48,7 +48,7 @@ options = {
     "qdrant_url": "http://qdrant:6334",  # Ensure this is the correct gRPC URL
     "collection_name": collection_name,
     "schema": df.schema.json(),
-    "embedding_field": "embedding",  # Use 'vector_field' instead of 'vector_fields'
+    "embedding_field": "embedding", 
 }
 
 # Step 6: Write DataFrame to Qdrant

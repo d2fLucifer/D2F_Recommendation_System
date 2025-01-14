@@ -14,12 +14,13 @@ from pyspark.sql.functions import (
     lag, unix_timestamp, col, lit
 )
 from pyspark.sql.window import Window
+from pyspark.ml.functions import vector_to_array
 
 # Spark ML libraries
 from pyspark.ml.feature import Tokenizer, StopWordsRemover, HashingTF, IDF
 from pyspark.ml.linalg import DenseVector, SparseVector
 from spark_session import create_spark_session          
-
+from pyspark.sql import SparkSession
 # Configure logging
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -180,6 +181,8 @@ def main():
     )
 
     logger.info("Final DataFrame sample:")
+    final_df = final_df.withColumn("vector_array", vector_to_array(col("vector"), dtype="float32"))
+
     final_df.show(10, truncate=False)
 
     # ======================================================================
@@ -199,21 +202,26 @@ def main():
     logger.info("Qdrant collection created or recreated.")
 
     qdrant_options = {
-    "qdrant_url": "http://qdrant:6334",  # Replace with your Qdrant gRPC URL
-    "collection_name": "recommendation_collection",
-    "schema": final_df.schema.json(),
-    "embedding_field": "vector",
-    "batch_size": 64,          # Optional: adjust based on your performance needs
-    "retries": 10,              # Optional: number of upload retries
-    "api_key": None            # Optional: if your Qdrant instance requires an API key
-}
-    final_df.write \
-    .format("io.qdrant.spark.Qdrant") \
-    .options(**qdrant_options) \
-    .mode("append") \
-    .save()
+        "qdrant_url": f"http://{QDRANT_HOST}:6334",  # Replace with your Qdrant URL
+        "collection_name": QDRANT_COLLECTION_NAME,
+        "schema": final_df.schema.json(),
+        "embedding_field": "vector_array",
+        "batch_size": 64,          # Optional: adjust based on your performance needs
+        "retries": 10,              # Optional: number of upload retries
+    
+    }
 
-   
+    # Ensure the Qdrant Spark connector is correctly implemented and available
+    try:
+       
+        final_df.write \
+            .format("io.qdrant.spark.Qdrant") \
+            .options(**qdrant_options) \
+            .mode("append") \
+            .save()
+        logger.info("Data successfully written to Qdrant.")
+    except Exception as e:
+        logger.error(f"Failed to write data to Qdrant: {e}")
 
     # ----------------------------------------------------------------------
     # 2.9 Stop Spark

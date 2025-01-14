@@ -29,6 +29,7 @@ transform_to_qdrant_job = SparkSubmitOperator(
         "spark.network.timeout": "800s",
         "spark.executor.heartbeatInterval": "200s"
     },
+    jars ="/usr/local/airflow/spark/jars/qdrant-spark-2.3.2.jar",
     dag=dag,
 )
 
