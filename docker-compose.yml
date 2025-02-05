@@ -1,30 +1,24 @@
+version: '3.8'
+
 x-spark-common: &spark-common
   image: bitnami/spark:3.4.0
   volumes:
     - ./jobs:/opt/bitnami/spark/jobs
     - ./data:/opt/bitnami/spark/data
-  networks:
-    - airflow-spark-network
 
 x-airflow-common: &airflow-common
-  build:
-    context: .
-    dockerfile: Dockerfile
+  build: .
   env_file:
     - airflow.env
     - .env
   environment:
-    - MONGODB_URI=${MONGODB_URI}
+    MONGODB_URI: ${MONGODB_URI}
   volumes:
     - ./jobs:/opt/airflow/jobs
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./data:/opt/airflow/data
-    - airflow-db-data:/var/lib/postgresql/data # Persistent metadata storage
-  depends_on:
-    - postgres
-  networks:
-    - airflow-spark-network
+    - airflow-db-data:/var/lib/postgresql/data
 
 services:
   spark-master:
@@ -33,6 +27,8 @@ services:
     ports:
       - "9090:8080"
       - "7077:7077"
+    networks:
+      - airflow-network
 
   spark-worker:
     <<: *spark-common
@@ -44,17 +40,19 @@ services:
       SPARK_WORKER_CORES: 4
       SPARK_WORKER_MEMORY: 4g
       SPARK_MASTER_URL: spark://spark-master:7077
+    networks:
+      - airflow-network
 
   postgres:
     image: postgres:14.0
     environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
     volumes:
-      - postgres-data:/var/lib/postgresql/data # Persistent storage for Postgres
+      - postgres-db:/var/lib/postgresql/data
     networks:
-      - airflow-spark-network
+      - airflow-network
 
   webserver:
     <<: *airflow-common
@@ -63,10 +61,15 @@ services:
       - "8080:8080"
     depends_on:
       - scheduler
+      - postgres
+    networks:
+      - airflow-network
 
   scheduler:
     <<: *airflow-common
     command: bash -c "airflow db migrate && airflow users create --username admin --firstname Yusuf --lastname Ganiyu --role Admin --email airscholar@gmail.com --password admin && airflow scheduler"
+    networks:
+      - airflow-network
 
   minio:
     container_name: milvus-minio
@@ -78,7 +81,7 @@ services:
       - "9001:9001"
       - "9000:9000"
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+      - minio-data:/minio_data
     command: minio server /minio_data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -86,21 +89,7 @@ services:
       timeout: 20s
       retries: 3
     networks:
-      - airflow-spark-network
-
-  # jupyter:
-  #   image: jupyter/base-notebook:latest
-  #   container_name: jupyter-notebook
-  #   ports:
-  #     - "8888:8888"
-  #   volumes:
-  #     - ./notebooks:/home/jovyan/work
-  #   environment:
-  #     JUPYTER_ENABLE_LAB: "yes"
-  #   command: start-notebook.sh
-  #   depends_on:
-  #     qdrant:
-  #       condition: service_healthy
+      - airflow-network
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -109,15 +98,10 @@ services:
     ports:
       - 6333:6333
       - 6334:6334
-    expose:
-      - 6333
-      - 6334
-      - 6335
-    configs:
-      - source: qdrant_config
-        target: /qdrant/config/production.yaml
     volumes:
       - ./qdrant_data:/qdrant/storage
+    environment:
+      QDRANT_LOG_LEVEL: INFO
     healthcheck:
       test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
       interval: 10s
@@ -125,35 +109,28 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - airflow-spark-network
+      - airflow-network
 
   mongo:
-    image: custom-mongo
     build:
       context: .
       dockerfile: Dockerfile.mongo
     container_name: recommendation_mongo
     restart: always
     ports:
-      - "27017:27017"
+      - "27017:27017"   # Exposing MongoDB on port 27017
     volumes:
-      - mongo_data:/data/db
+      - mongo-data:/data/db
     networks:
-      - airflow-spark-network
-    
+      - airflow-network
 
 
 volumes:
-  postgres-data: # Volume for Postgres
-  airflow-db-data: # Volume for Airflow metadata
-  mongo_data: # Volume for MongoDB
-
-configs:
-  qdrant_config:
-    content: |
-      log_level: INFO
+  postgres-db:
+  airflow-db-data:
+  mongo-data:
+  minio-data:
 
 networks:
-  airflow-spark-network:
-    external: true
+  airflow-network:
     driver: bridge
