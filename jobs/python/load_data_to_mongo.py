@@ -78,7 +78,7 @@ def load_csv_to_mongo(file_path, mongo_uri, db_name, collection_name):
 
 # Example usage (replace with actual values or parameters)
 if __name__ == "__main__":
-    file_path = "s3a://recommendation/raw/merged_data_second.csv"  # Update with the actual file path or parameter
+    file_path = "s3a://recommendation/dataset.csv"  # Update with the actual file path or parameter
     mongo_uri = "mongodb://root:example@mongo:27017/admin"  # Update with the actual MongoDB URI, include credentials if necessary
     db_name = "recommendation_system"
     collection_name = "user_behavior"
