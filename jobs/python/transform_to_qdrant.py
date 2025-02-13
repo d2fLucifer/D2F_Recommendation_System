@@ -49,7 +49,7 @@ def main():
 
     logger.info("Data loaded from MongoDB:")
     df.show(10)
-    df = df.limit(1000)
+    df = df.limit(10)
 
     # Feature Engineering
     df = df.withColumn("event_time", to_timestamp("event_time", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"))
@@ -137,26 +137,28 @@ def main():
         vectors_config={"size": 128, "distance": "Cosine"},  # Adjust size according to word2vec vector size
     )
 
-    # Convert DataFrame to list of points
-    def save_to_qdrant(df):
-        points = df.rdd.map(lambda row: PointStruct(
-            id=str(uuid.uuid4()),  # Generate unique ID
-            vector=row["vector"],
-            payload={
-                "user_id": row["user_id"],
-                "product_id": row["product_id"],
-                "name": row["name"]
-            }
-        )).collect()
-        
-        # Insert into Qdrant
-        client.upsert(collection_name=COLLECTION_NAME, points=points)
-        print(f"✅ Successfully inserted {len(points)} records into Qdrant.")
+    
+    ## Step 5: Configure connection options for Qdrant
+    options = {
+        "qdrant_url": "http://qdrant:6334",  # Ensure this is the correct gRPC URL
+        "collection_name": COLLECTION_NAME,
+        "schema": df_final.schema.json(),
+        "embedding_field": "vector", 
+    }
 
-    # Save data to Qdrant
-    save_to_qdrant(df_final)
+    # Step 6: Write DataFrame to Qdrant
+    try:
+        # Debugging: Print schema and data
+        df_final.printSchema()
+        df_final.show(truncate=False)
 
-        
+        df_final.write.format("io.qdrant.spark.Qdrant") \
+            .options(**options) \
+            .mode("append") \
+            .save()
+        print("✅ Data successfully inserted into Qdrant.")
+    except Exception as e:
+        print(f"❌ Error inserting data into Qdrant: {e}")
 
         # Stop Spark
     spark.stop()
