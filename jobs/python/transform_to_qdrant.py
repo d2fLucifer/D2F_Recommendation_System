@@ -10,7 +10,10 @@ from pyspark.sql.window import Window
 from pyspark.ml.feature import Tokenizer, StopWordsRemover, Word2Vec
 from pyspark.sql.types import ArrayType, FloatType
 from spark_session import create_spark_session
-
+from qdrant_client import QdrantClient
+from qdrant_client.models import PointStruct
+from pyspark.sql.functions import col
+import uuid
 # Logging Setup
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -46,6 +49,7 @@ def main():
 
     logger.info("Data loaded from MongoDB:")
     df.show(10)
+    df = df.limit(1000)
 
     # Feature Engineering
     df = df.withColumn("event_time", to_timestamp("event_time", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"))
@@ -120,8 +124,41 @@ def main():
     df_final = df_final.select("user_id", "product_id", "name", "vector")
     logger.info("Vectorized DataFrame:")
     df_final.show(10, truncate=False)
+    QDRANT_HOST = "qdrant"
+    QDRANT_PORT = 6333
+    COLLECTION_NAME = "user_behaviour"
 
-    # Stop Spark
+    # Initialize Qdrant client
+    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+
+    # Ensure collection exists
+    client.recreate_collection(
+        collection_name=COLLECTION_NAME,
+        vectors_config={"size": 128, "distance": "Cosine"},  # Adjust size according to word2vec vector size
+    )
+
+    # Convert DataFrame to list of points
+    def save_to_qdrant(df):
+        points = df.rdd.map(lambda row: PointStruct(
+            id=str(uuid.uuid4()),  # Generate unique ID
+            vector=row["vector"],
+            payload={
+                "user_id": row["user_id"],
+                "product_id": row["product_id"],
+                "name": row["name"]
+            }
+        )).collect()
+        
+        # Insert into Qdrant
+        client.upsert(collection_name=COLLECTION_NAME, points=points)
+        print(f"✅ Successfully inserted {len(points)} records into Qdrant.")
+
+    # Save data to Qdrant
+    save_to_qdrant(df_final)
+
+        
+
+        # Stop Spark
     spark.stop()
     logger.info("Spark session stopped.")
 
