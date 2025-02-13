@@ -4,20 +4,16 @@ import logging
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     to_timestamp, when, sum as spark_sum,
-    lag, unix_timestamp, col, lit
+    lag, unix_timestamp, col, lit, udf
 )
 from pyspark.sql.window import Window
+from pyspark.ml.feature import Tokenizer, StopWordsRemover, Word2Vec
+from pyspark.sql.types import ArrayType, FloatType
+from spark_session import create_spark_session
 
 # Logging Setup
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-def create_spark_session():
-    return SparkSession.builder \
-        .appName("UserBehaviorAnalysis") \
-        .config("spark.mongodb.input.uri", "mongodb://root:example@mongo:27017/admin") \
-        .config("spark.mongodb.output.uri", "mongodb://root:example@mongo:27017/admin") \
-        .getOrCreate()
 
 def main():
     # Initialize Spark
@@ -79,7 +75,6 @@ def main():
     # Time Spent Feature
     window_order = Window.partitionBy("user_session").orderBy("event_time")
     df_time = df.withColumn("prev_event_time", lag("event_time").over(window_order))
-    df_time = df_time.na.fill({"prev_event_time": "1970-01-01T00:00:00.000Z"})
     df_time = df_time.withColumn("time_spent", (unix_timestamp("event_time") - unix_timestamp("prev_event_time")).cast("double"))
     df_time = df_time.na.fill({"time_spent": 0})
 
@@ -107,6 +102,24 @@ def main():
     final_df = df_features.select("user_id", "product_id", "name", "score")
     logger.info("Final DataFrame:")
     final_df.show(10)
+
+    # NLP Feature Engineering
+    tokenizer = Tokenizer(inputCol="name", outputCol="words")
+    df_tokenized = tokenizer.transform(df)
+
+    stopwords_remover = StopWordsRemover(inputCol="words", outputCol="filtered_words")
+    df_filtered = stopwords_remover.transform(df_tokenized)
+
+    word2Vec = Word2Vec(vectorSize=128, minCount=0, inputCol="filtered_words", outputCol="word2vec_features")
+    model = word2Vec.fit(df_filtered)
+    df_vectorized = model.transform(df_filtered)
+
+    to_list_udf = udf(lambda vec: vec.toArray().tolist(), ArrayType(FloatType()))
+    df_final = df_vectorized.withColumn("vector", to_list_udf(col("word2vec_features")))
+
+    df_final = df_final.select("user_id", "product_id", "name", "vector")
+    logger.info("Vectorized DataFrame:")
+    df_final.show(10, truncate=False)
 
     # Stop Spark
     spark.stop()
