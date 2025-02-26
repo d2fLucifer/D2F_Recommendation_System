@@ -27,9 +27,9 @@ with DAG(
     test_package_job = SparkSubmitOperator(
         task_id="test_package_job",
         conn_id="spark-conn",
-        application="jobs/python/test_package.py",
+        application="jobs/python/processing_data.py",
         name="test_package_job",
-        packages="org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2,",
+        packages="org.mongodb.spark:mongo-spark-connector_2.12:3.0.1",
         jars ="/usr/local/airflow/spark/jars/qdrant-spark-2.3.2.jar",
         conf={
             "spark.driver.memory": "4g",
