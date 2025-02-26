@@ -26,6 +26,7 @@ def main():
     mongo_uri = "mongodb://root:example@mongo:27017/admin"
     db_name = "recommendation_system"
     collection_name = "user_behavior"
+    
 
     # Load Data from MongoDB
     try:
@@ -49,7 +50,7 @@ def main():
 
     logger.info("Data loaded from MongoDB:")
     df.show(10)
-    df = df.limit(10)
+    
 
     # Feature Engineering
     df = df.withColumn("event_time", to_timestamp("event_time", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"))

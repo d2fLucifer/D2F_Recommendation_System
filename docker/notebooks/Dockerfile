@@ -20,7 +20,8 @@ RUN curl -O https://repo1.maven.org/maven2/software/amazon/awssdk/s3/2.18.41/s3-
     && curl -O https://repo1.maven.org/maven2/io/delta/delta-core_2.12/2.3.0/delta-core_2.12-2.3.0.jar \
     && curl -O https://repo1.maven.org/maven2/io/delta/delta-storage/2.3.0/delta-storage-2.3.0.jar \
     && curl -O https://repo1.maven.org/maven2/io/qdrant/spark/0.1.0/qdrant-spark-0.1.0.jar \
-    && mv s3-2.18.41.jar aws-java-sdk-1.12.367.jar aws-java-sdk-bundle-1.11.1026.jar hadoop-aws-3.3.2.jar hadoop-common-3.3.2.jar delta-core_2.12-2.3.0.jar delta-storage-2.3.0.jar qdrant-spark-0.1.0.jar /usr/local/spark/jars/
+    && curl -O https://repo1.maven.org/maven2/org/mongodb/spark/mongo-spark-connector_2.12/10.0.2/mongo-spark-connector_2.12-10.0.2.jar \
+    && mv s3-2.18.41.jar aws-java-sdk-1.12.367.jar aws-java-sdk-bundle-1.11.1026.jar hadoop-aws-3.3.2.jar hadoop-common-3.3.2.jar delta-core_2.12-2.3.0.jar delta-storage-2.3.0.jar qdrant-spark-0.1.0.jar mongo-spark-connector_2.12-10.0.2.jar /usr/local/spark/jars/
 
 # Install Python packages
 RUN pip install --no-cache-dir \

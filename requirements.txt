@@ -3,7 +3,7 @@ apache-airflow-providers-apache-spark
 pyspark==3.4.0 
 Faker 
 pymongo 
-pymilvus 
 qdrant-client
-apache-airflow-providers-qdrant
-fastembed
+google-generativeai
+google-genai
+requests 
