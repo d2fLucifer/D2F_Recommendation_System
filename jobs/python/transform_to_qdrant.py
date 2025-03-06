@@ -23,9 +23,9 @@ def main():
     spark = create_spark_session()
 
     # MongoDB connection settings
-    mongo_uri = "mongodb://root:example@mongo:27017/admin"
-    db_name = "recommendation_system"
-    collection_name = "user_behavior"
+    MONGO_URI = "mongodb://root:example@mongo:27017/admin"
+    DB_NAME = "recommendation_system" 
+    COLLECTION_NAME = "user_behavior"
     
 
     # Load Data from MongoDB

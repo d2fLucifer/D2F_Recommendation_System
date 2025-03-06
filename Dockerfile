@@ -33,8 +33,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Note:
 # Removed the following lines because initializing the database should be done at runtime,
 # not during the build process.
-# RUN airflow db init && \
-#     airflow db upgrade
+RUN airflow db init && \
+    airflow db upgrade
 
 # Set default entrypoint command as per the base image's expectations
 CMD ["webserver"]
