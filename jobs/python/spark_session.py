@@ -6,10 +6,11 @@ def create_spark_session(
         hudi_version='0.14.0', 
         spark_version='3.4', 
         additional_configs=None,
-        mongo_connector_version='10.1.1'  # Updated to a compatible version
+        mongo_connector_version='10.1.1',
+        kafka_version='3.4.0'  # Added Kafka version parameter
     ):
     """
-    Create and configure a SparkSession with Hudi, S3, and MongoDB support.
+    Create and configure a SparkSession with Hudi, S3, MongoDB, and Kafka support.
     
     Parameters:
     - app_name: Name of the Spark application.
@@ -17,22 +18,20 @@ def create_spark_session(
     - spark_version: Version of Spark.
     - additional_configs: Dictionary for additional Spark configurations.
     - mongo_connector_version: Version of MongoDB Spark Connector to use.
+    - kafka_version: Version of Kafka client to use.
     
     Returns:
     - Configured SparkSession.
     """
     
-    # Define the Hudi and Hadoop AWS packages
+    # Define the Hudi, Hadoop AWS, MongoDB, and Kafka packages
     hudi_package = f"org.apache.hudi:hudi-spark{spark_version}-bundle_2.12:{hudi_version}"
     hadoop_aws_package = "org.apache.hadoop:hadoop-aws:3.3.2"
     mongo_package = f"org.mongodb.spark:mongo-spark-connector_2.12:{mongo_connector_version}"
+    kafka_package = f"org.apache.spark:spark-sql-kafka-0-10_2.12:{kafka_version}"
     
     # Combine all packages
-    all_packages = f"{hudi_package},{hadoop_aws_package},{mongo_package}"
-    
-    # Set the required PySpark submit arguments for Hudi, Hadoop AWS, and MongoDB Spark Connector
-    # Removed PYSPARK_SUBMIT_ARGS to avoid redundancy
-    # os.environ["PYSPARK_SUBMIT_ARGS"] = f"--packages {all_packages} pyspark-shell"
+    all_packages = f"{hudi_package},{hadoop_aws_package},{mongo_package},{kafka_package}"
     
     # Create Spark session with base configurations
     spark_builder = SparkSession.builder \
@@ -46,7 +45,7 @@ def create_spark_session(
         .config('spark.executor.memory', '4g') \
         .config('spark.executor.cores', '4') \
         .config('spark.driver.memory', '4g') \
-        .config("spark.sql.broadcastTimeout", "6000s")  \
+        .config("spark.sql.broadcastTimeout", "6000s") \
         .config('spark.memory.fraction', '0.8') \
         .config('spark.memory.storageFraction', '0.2') \
         .config('spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version', '2') \
@@ -59,9 +58,13 @@ def create_spark_session(
         .config("fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
         .config("spark.mongodb.output.uri", "mongodb://root:example@mongo:27017/recommendation_system?authSource=admin")\
         .config("spark.jars", "/usr/local/airflow/spark/jars/qdrant-spark-2.3.2.jar") \
-        .master("local[*]")  \
-        .config("spark.jars.packages", all_packages)  # Use all_packages here
-    
+        .master("local[*]") \
+        .config("spark.jars.packages", all_packages) \
+        .config("spark.kafka.bootstrap.servers", "localhost:9092") \
+        .config("spark.kafka.group.id", "spark-consumer-group") \
+        .config("spark.kafka.auto.offset.reset", "latest") \
+        .config("spark.streaming.kafka.maxRatePerPartition", "1000")
+
     # Apply additional configurations if provided
     if additional_configs:
         for key, value in additional_configs.items():

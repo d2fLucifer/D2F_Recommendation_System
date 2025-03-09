@@ -55,7 +55,7 @@ df_final.show(truncate=False)
 COLLECTION_NAME = "product_embeddings"
 
 # Initialize Qdrant client
-client = QdrantClient(url="http://qdrant:6333")
+client = QdrantClient(url="http://103.155.161.100:6333")
 
 # Create Qdrant collection
 client.recreate_collection(
@@ -65,7 +65,7 @@ client.recreate_collection(
 
 # Configure connection options for Qdrant
 options = {
-    "qdrant_url": "http://qdrant:6334",
+    "qdrant_url": "http://103.155.161.100:6334",
     "collection_name": COLLECTION_NAME,
     "embedding_field": "vector",
     "schema": df_final.schema.json(),
