@@ -26,10 +26,11 @@ df = spark.read \
     .option("header", "true") \
     .option("mode", "PERMISSIVE") \
     .option("columnNameOfCorruptRecord", "_corrupt_record") \
-    .csv("s3a://dataset/dataset1.csv")
+    .csv("s3a://dataset/dataset.csv")
 
 logger.info("Successfully read CSV file")
 df.show()
+# df=df.limit(1000)
 
 logger.info(f"Total records: {df.count()}")
 
@@ -52,7 +53,7 @@ df_final = df_final.select("user_id", "product_id", "name", "vector","brand","ca
 df_final.show(truncate=False)
 
 # Define COLLECTION_NAME
-COLLECTION_NAME = "product_embeddings"
+COLLECTION_NAME = "test_collection"
 
 # Initialize Qdrant client
 client = QdrantClient(url="http://103.155.161.100:6333")
@@ -70,10 +71,19 @@ options = {
     "embedding_field": "vector",
     "schema": df_final.schema.json(),
 }
+logger.info(f"Before dropping duplicates: {df.count()}")
+df = df.dropDuplicates()
+logger.info(f"After dropping duplicates: {df.count()}")
 
-# Write DataFrame to Qdrant
-df_final.printSchema()
-df_final.show(truncate=False)
+
+distinct_user_count = df.select("user_id").distinct().count()
+
+distinct_product_count = df.select("product_id").distinct().count()
+logger.info(f"Distinct user count: {distinct_user_count}")
+logger.info(f"Distinct product count: {distinct_product_count}")
+logger.info(f"Total records: {df.count()}")
+
+
 df_final.write.format("io.qdrant.spark.Qdrant") \
         .options(**options) \
         .mode("append") \
