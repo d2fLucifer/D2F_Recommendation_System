@@ -18,17 +18,20 @@ RUN apt-get update && \
 RUN mkdir -p /usr/local/airflow/spark/jars && \
     curl -fSL https://repo1.maven.org/maven2/io/qdrant/spark/2.3.2/spark-2.3.2.jar -o /usr/local/airflow/spark/jars/qdrant-spark-2.3.2.jar
 
+    # Copy the requirements file into the image
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+        mkdir -p /usr/local/bin && \
+        mv /root/.local/bin/uv /usr/local/bin/uv
+    
+COPY requirements.txt /opt/airflow/
+RUN uv pip install --system --no-cache-dir -r /opt/airflow/requirements.txt
+
 # Set JAVA_HOME environment variable
 ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 
 # Switch back to the airflow user
 USER airflow
 
-# Copy the requirements file into the image
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Note:
 # Removed the following lines because initializing the database should be done at runtime,

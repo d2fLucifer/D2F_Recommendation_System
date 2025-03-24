@@ -53,7 +53,7 @@ df_final = df_final.select("user_id", "product_id", "name", "vector","brand","ca
 df_final.show(truncate=False)
 
 # Define COLLECTION_NAME
-COLLECTION_NAME = "test_collection"
+COLLECTION_NAME = "test_v2"
 
 # Initialize Qdrant client
 client = QdrantClient(url="http://103.155.161.100:6333")
@@ -71,9 +71,9 @@ options = {
     "embedding_field": "vector",
     "schema": df_final.schema.json(),
 }
-logger.info(f"Before dropping duplicates: {df.count()}")
-df = df.dropDuplicates()
-logger.info(f"After dropping duplicates: {df.count()}")
+logger.info(f"Before dropping duplicates: {df_final.count()}")
+df_final = df_final.dropDuplicates()
+logger.info(f"After dropping duplicates: {df_final.count()}")
 
 
 distinct_user_count = df.select("user_id").distinct().count()
