@@ -1,10 +1,10 @@
-# Base image
-FROM mongo:latest
+# Use MongoDB 4.4 instead of latest
+FROM mongo:4.4
 
-# Set working directory (optional, not needed for MongoDB specifically)
+# Set working directory (optional)
 WORKDIR /app
 
-# Copy the init-mongo.js script into the appropriate directory for MongoDB initialization
+# Copy the init-mongo.js script
 COPY ./init-mongo.js /docker-entrypoint-initdb.d/init-mongo.js
 
 # Copy the CSV data
@@ -18,15 +18,4 @@ ENV MONGO_INITDB_DATABASE=recommendation_system
 # Expose the MongoDB default port
 EXPOSE 27017
 
-# Install additional tools and packages
-RUN apt-get update && apt-get install -y \
-    wget gnupg \
-    && wget -qO - https://pgp.mongodb.com/server-6.0.asc | apt-key add - \
-    && echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/debian buster/mongodb-org/6.0 main" > /etc/apt/sources.list.d/mongodb-org-6.0.list \
-    && apt-get update && apt-get install -y mongodb-mongosh \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Modify MongoDB to bind to all IP addresses (allow external access)
-CMD ["mongod", "--bind_ip", "0.0.0.0"]
-
+# No need for custom CMD; default entrypoint works fine

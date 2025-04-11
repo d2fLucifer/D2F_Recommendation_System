@@ -5,14 +5,18 @@ x-spark-common: &spark-common
   volumes:
     - ./jobs:/opt/bitnami/spark/jobs
     - ./data:/opt/bitnami/spark/data
+  networks:
+    - shared-network
 
 x-airflow-common: &airflow-common
-  build: .
+  build:
+    context: .
+    dockerfile: Dockerfile
   env_file:
     - airflow.env
     - .env
   environment:
-    MONGODB_URI: ${MONGODB_URI}
+    MONGODB_URI: "${MONGODB_URI}"
   volumes:
     - ./jobs:/opt/airflow/jobs
     - ./dags:/opt/airflow/dags
@@ -23,7 +27,8 @@ x-airflow-common: &airflow-common
 services:
   spark-master:
     <<: *spark-common
-    command: bin/spark-class org.apache.spark.deploy.master.Master
+    container_name: spark-master
+    command: "bin/spark-class org.apache.spark.deploy.master.Master"
     ports:
       - "9090:8080"
       - "7077:7077"
@@ -32,40 +37,43 @@ services:
 
   spark-worker-1:
     <<: *spark-common
-    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    container_name: spark-worker-1
+    command: "bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077"
     depends_on:
       - spark-master
     environment:
-      SPARK_MODE: worker
-      SPARK_WORKER_CORES: 4
-      SPARK_WORKER_MEMORY: 4g
-      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_MASTER_URL: "spark://spark-master:7077"
+      SPARK_WORKER_WEBUI_PORT: "8081"
+    ports:
+      - "8083:8081"
     networks:
       - shared-network
 
   spark-worker-2:
     <<: *spark-common
-    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    container_name: spark-worker-2
+    command: "bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077"
     depends_on:
       - spark-master
     environment:
-      SPARK_MODE: worker
-      SPARK_WORKER_CORES: 4
-      SPARK_WORKER_MEMORY: 4g
-      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_MASTER_URL: "spark://spark-master:7077"
+      SPARK_WORKER_WEBUI_PORT: "8082"
+    ports:
+      - "8082:8082"
     networks:
       - shared-network
 
   spark-worker-3:
     <<: *spark-common
-    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    container_name: spark-worker-3
+    command: "bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077"
     depends_on:
       - spark-master
     environment:
-      SPARK_MODE: worker
-      SPARK_WORKER_CORES: 4
-      SPARK_WORKER_MEMORY: 4g
-      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_MASTER_URL: "spark://spark-master:7077"
+      SPARK_WORKER_WEBUI_PORT: "8083"
+    ports:
+      - "8084:8083"
     networks:
       - shared-network
 
@@ -73,11 +81,17 @@ services:
     build:
       context: ./docker/notebooks
       dockerfile: Dockerfile
-    container_name: "spark-notebook"
+    container_name: spark-notebook
     user: root
     environment:
-      - JUPYTER_ENABLE_LAB="yes"
-      - GRANT_SUDO="yes"
+      JUPYTER_ENABLE_LAB: "yes"
+      GRANT_SUDO: "yes"
+      LD_LIBRARY_PATH: "/usr/lib/x86_64-linux-gnu:/usr/local/lib:${LD_LIBRARY_PATH}"
+      OPENBLAS_NUM_THREADS: "1"
+      SPARK_SUBMIT_OPTS: "-Djava.library.path=/usr/lib/x86_64-linux-gnu"
+      SPARK_CLASSPATH: "/opt/bitnami/spark/jars/netlib-java-1.1.2.jar"
+      JUPYTER_TOKEN: ""
+    command: "start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
     volumes:
       - ./notebooks/work:/home/jovyan/work
     ports:
@@ -89,18 +103,18 @@ services:
   postgres:
     image: postgres:14.0
     environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
+      POSTGRES_USER: "airflow"
+      POSTGRES_PASSWORD: "airflow"
+      POSTGRES_DB: "airflow"
     volumes:
       - postgres-db:/var/lib/postgresql/data
     networks:
       - shared-network
 
   webserver:
-    container_name: webserver
     <<: *airflow-common
-    command: webserver
+    container_name: webserver
+    command: "webserver"
     ports:
       - "8080:8080"
     depends_on:
@@ -110,9 +124,10 @@ services:
       - shared-network
 
   scheduler:
-    container_name: scheduler
     <<: *airflow-common
-    command: bash -c "airflow db migrate && airflow users create --username admin --firstname Yusuf --lastname Ganiyu --role Admin --email airscholar@gmail.com --password admin && airflow scheduler"
+    container_name: scheduler
+    user: root
+    command: "bash -c \"airflow db migrate && airflow users create --username admin --firstname Yusuf --lastname Ganiyu --role Admin --email airscholar@gmail.com --password admin && airflow scheduler\""
     networks:
       - shared-network
 
@@ -120,19 +135,32 @@ services:
     container_name: minio
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-    ports:
-      - "9001:9001"
-      - "9000:9000"
+      MINIO_ROOT_USER: "minioadmin"
+      MINIO_ROOT_PASSWORD: "minioadmin"
+      MINIO_BROWSER_REDIRECT_URL: "http://minio-ui.d2f.io.vn"
+      MINIO_REGION: "us-east-1"
+      # Optimize for large uploads
+      MINIO_API_UPLOAD_PART_SIZE: "10737418240" # 10GB per part (max 10,000 parts for 100GB total)
+      MINIO_API_UPLOAD_MAX_SIZE: "107374182400" # 100GB max object size
+      MINIO_MEMORY_LIMIT: "8g"
+      MINIO_DISK_CACHE_SIZE: "0" # Disable disk cache for large uploads
     volumes:
       - minio-data:/minio_data
-    command: minio server /minio_data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: "minio server /minio_data --console-address \":9001\""
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
       timeout: 20s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 2G
     networks:
       - shared-network
 
@@ -140,13 +168,10 @@ services:
     image: qdrant/qdrant:latest
     restart: always
     container_name: qdrant
-    ports:
-      - 6333:6333
-      - 6334:6334
     volumes:
       - ./qdrant_data:/qdrant/storage
     environment:
-      QDRANT_LOG_LEVEL: INFO
+      QDRANT_LOG_LEVEL: "INFO"
     healthcheck:
       test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
       interval: 10s
@@ -156,39 +181,66 @@ services:
     networks:
       - shared-network
 
+  mongo:
+    build:
+      context: .
+      dockerfile: Dockerfile.mongo
+    container_name: mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - shared-network
+
   zookeeper:
-    container_name: "zookeeper"
+    container_name: zookeeper
     image: confluentinc/cp-zookeeper:5.2.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_TICK_TIME: "2000"
     ports:
       - "2181:2181"
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
     networks:
       - shared-network
 
   kafka:
-    container_name: "kafka"
+    container_name: kafka
     image: confluentinc/cp-enterprise-kafka:5.2.1
-    ports:
-      - "9092:9092"
-      - "29092:29092"
     depends_on:
       - zookeeper
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka.d2f.io.vn:9092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_BROKER_ID: "1"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,EXTERNAL://kafka.d2f.io.vn:9092"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092"
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
-      KAFKA_MESSAGE_MAX_BYTES: 10000000
-      KAFKA_REPLICA_FETCH_MAX_BYTES: 10000000
-      KAFKA_SOCKET_REQUEST_MAX_BYTES: 10000000
-      KAFKA_MAX_PARTITION_FETCH_BYTES: 10000000
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "100"
+      KAFKA_MESSAGE_MAX_BYTES: "10000000"
+      KAFKA_REPLICA_FETCH_MAX_BYTES: "10000000"
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: "10000000"
+      KAFKA_MAX_PARTITION_FETCH_MAX_BYTES: "10000000"
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    networks:
+      - shared-network
+
+  dozzle:
+    container_name: dozzle
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "2021:8080"
+    environment:
+      DOZZLE_ADDR: ":8080"
+      DOZZLE_LEVEL: "info"
+    restart: unless-stopped
     networks:
       - shared-network
 
@@ -197,14 +249,11 @@ services:
     depends_on:
       - zookeeper
       - kafka
-    ports:
-      - "8081:8081"
-      - "31002:31002"
     environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper:2181
+      SCHEMA_REGISTRY_HOST_NAME: "schema-registry"
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: "zookeeper:2181"
       SCHEMA_REGISTRY_JMX_HOSTNAME: "localhost"
-      SCHEMA_REGISTRY_JMX_PORT: 31002
+      SCHEMA_REGISTRY_JMX_PORT: "31002"
     networks:
       - shared-network
 
@@ -212,30 +261,30 @@ services:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
     ports:
-      - "8082:8080"  # Changed to avoid conflict with Airflow webserver
+      - "8089:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: "local"
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:29092"
       KAFKA_CLUSTERS_0_ZOOKEEPER: "zookeeper:2181"
-    depends_on:
-      - kafka
-      - zookeeper
     networks:
       - shared-network
 
   nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     image: nginx:latest
     container_name: nginx
     ports:
       - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - /etc/letsencrypt/live/d2f.io.vn/fullchain.pem:/etc/nginx/certs/d2f.io.vn.crt
-      - /etc/letsencrypt/live/d2f.io.vn/privkey.pem:/etc/nginx/certs/d2f.io.vn.key
     depends_on:
       - minio
       - qdrant
+      - kafka-ui
+      - dozzle
+      - mongo
+    volumes:
+      - ./html:/var/www/html
     networks:
       - shared-network
 
@@ -243,6 +292,9 @@ volumes:
   postgres-db:
   airflow-db-data:
   minio-data:
+  mongo-data:
+  qdrant_data:
+  letsencrypt:
 
 networks:
   shared-network:

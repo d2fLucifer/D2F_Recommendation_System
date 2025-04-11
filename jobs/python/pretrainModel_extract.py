@@ -11,7 +11,7 @@ import logging
 from pyspark import StorageLevel
 
 # Constants
-KAFKA_BROKER = "kafka.d2f.io.vn:9092"
+KAFKA_BROKER = "kafka:9092"
 TOPIC = "user-behavior-events"
 MONGO_URI = "mongodb://root:example@103.155.161.100:27017/recommendation_system?authSource=admin"
 QDRANT_URL = "http://103.155.161.100:6333"

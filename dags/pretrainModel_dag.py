@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-KAFKA_BROKER = "kafka.d2f.io.vn:9092"
+KAFKA_BROKER = "kafka:29092"
 TOPIC = "user-behavior-events"
 MINIMUM_MESSAGES = 0
 

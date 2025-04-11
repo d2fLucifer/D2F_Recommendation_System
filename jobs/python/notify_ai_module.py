@@ -4,7 +4,7 @@ import json
 import sys
 from datetime import datetime
 
-KAFKA_BROKER = "kafka.d2f.io.vn:9092"  
+KAFKA_BROKER = "kafka:9092"  
 TOPIC = "model_retrain_event"
 
 def create_topic_if_not_exists():

@@ -1,5 +1,3 @@
-# spark_session.py
-
 import os
 from pyspark.sql import SparkSession
 
@@ -13,19 +11,8 @@ def create_spark_session(
     ):
     """
     Create and configure a SparkSession with Hudi, S3, MongoDB, and Kafka support.
-    
-    Parameters:
-    - app_name: Name of the Spark application.
-    - hudi_version: Version of Hudi to use.
-    - spark_version: Version of Spark.
-    - additional_configs: Dictionary for additional Spark configurations.
-    - mongo_connector_version: Version of MongoDB Spark Connector to use.
-    - kafka_version: Version of Kafka client to use.
-    
-    Returns:
-    - Configured SparkSession.
     """
-    
+
     # Define packages
     hudi_package = f"org.apache.hudi:hudi-spark{spark_version}-bundle_2.12:{hudi_version}"
     hadoop_aws_package = "org.apache.hadoop:hadoop-aws:3.3.2"
@@ -42,29 +29,28 @@ def create_spark_session(
         .config('spark.sql.adaptive.enabled', 'true') \
         .config('spark.sql.adaptive.shuffle.targetPostShuffleInputSize', '64m') \
         .config('spark.sql.adaptive.coalescePartitions.enabled', 'true') \
-        .config('spark.executor.memory', '3g') \
+        .config('spark.executor.memory', '8g') \
+        .config("spark.sql.shuffle.partitions", "400") \
         .config('spark.executor.cores', '4') \
-        .config('spark.driver.memory', '2g') \
+        .config('spark.driver.memory', '8g') \
         .config('spark.memory.fraction', '0.6') \
         .config('spark.memory.storageFraction', '0.4') \
-        .config('spark.executor.extraJavaOptions', '-XX:+UseG1GC -XX:InitiatingHeapOccupancyPercent=35') \
-        .config('spark.driver.extraJavaOptions', '-XX:+UseG1GC -XX:InitiatingHeapOccupancyPercent=35') \
+        .config('spark.executor.extraJavaOptions', '-XX:+UseG1GC') \
+        .config('spark.driver.extraJavaOptions', '-XX:+UseG1GC') \
         .config("spark.sql.broadcastTimeout", "6000s") \
-        .config("fs.s3a.endpoint", "http://103.155.161.100:9000") \
-        .config("fs.s3a.access.key", "minioadmin") \
-        .config("fs.s3a.secret.key", "minioadmin") \
+        .config("fs.s3a.endpoint", "http://minio:9000") \
+        .config("fs.s3a.access.key", os.getenv("S3_ACCESS_KEY", "minioadmin")) \
+        .config("fs.s3a.secret.key", os.getenv("S3_SECRET_KEY", "minioadmin")) \
         .config("fs.s3a.path.style.access", "true") \
         .config("fs.s3a.connection.ssl.enabled", "false") \
         .config("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
         .config("spark.mongodb.output.uri", "mongodb://root:example@mongo:27017/recommendation_system?authSource=admin") \
         .config("spark.jars", "/usr/local/airflow/spark/jars/qdrant-spark-2.3.2.jar") \
-        .master("local[*]") \
-        .config("spark.jars.packages", all_packages) \
         .config("spark.kafka.bootstrap.servers", "localhost:9092") \
-        .config("spark.kafka.group.id", "spark-consumer-group") \
-        .config("spark.kafka.auto.offset.reset", "latest") \
-        .config("spark.streaming.kafka.maxRatePerPartition", "1000")
+        .config("spark.streaming.kafka.maxRatePerPartition", "1000") \
+        .config("spark.jars.packages", all_packages) \
+        .master("local[*]") 
 
     # Apply additional configurations if provided
     if additional_configs:
