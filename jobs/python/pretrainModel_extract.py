@@ -9,14 +9,20 @@ from qdrant_client import QdrantClient
 from spark_session import create_spark_session
 import logging
 from pyspark import StorageLevel
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Constants
-KAFKA_BROKER = "kafka:9092"
-TOPIC = "user-behavior-events"
-MONGO_URI = "mongodb://root:example@103.155.161.100:27017/recommendation_system?authSource=admin"
-QDRANT_URL = "http://103.155.161.100:6333"
-QDRANT_GPRC_URL = "http://103.155.161.100:6334"
-COLLECTION_NAME = "recommendation_system111"
+MONGO_URI = os.getenv("MONGO_URI")
+MONGO_DATABASE = os.getenv("MONGO_DATABASE")
+MONGO_USERBEHAVIORS_COLLECTION = os.getenv("MONGO_USERBEHAVIORS_COLLECTION")
+MONGO_PRODUCTS_COLLECTION = os.getenv("MONGO_PRODUCTS_COLLECTION")
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_GRPC_URL = os.getenv("QDRANT_GRPC_URL")
+COLLECTION_NAME = os.getenv("QDRANT_RECOMMENDATION_SYSTEM111")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,13 +35,13 @@ try:
     # Read MongoDB data - User Behaviors with selective columns
     df_userbehaviors = spark.read.format("mongo") \
         .option("uri", MONGO_URI) \
-        .option("database", "recommendation_system") \
-        .option("collection", "userbehaviors") \
+        .option("database", MONGO_DATABASE) \
+        .option("collection", MONGO_USERBEHAVIORS_COLLECTION) \
         .option("partitioner", "MongoSamplePartitioner") \
         .load() \
         .select("user_id", "product_id", "event_type", "event_time", "user_session") \
         .repartition(32)  # Adjusted for local[*] with 8 cores
-    logger.info(f"Read data from MongoDB 'userbehaviors'. Row count: {df_userbehaviors.count()}")
+    logger.info(f"Read data from MongoDB '{MONGO_USERBEHAVIORS_COLLECTION}'. Row count: {df_userbehaviors.count()}")
 
     # Persist with spill to disk
     df_userbehaviors.persist(StorageLevel.MEMORY_AND_DISK)
@@ -43,12 +49,12 @@ try:
     # Read MongoDB data - Products with selective columns
     df_products = spark.read.format("mongo") \
         .option("uri", MONGO_URI) \
-        .option("database", "recommendation_system") \
-        .option("collection", "products") \
+        .option("database", MONGO_DATABASE) \
+        .option("collection", MONGO_PRODUCTS_COLLECTION) \
         .option("partitioner", "MongoSamplePartitioner") \
         .load() \
         .select("product_id", "name", "brand", "category", "type", "price")
-    logger.info(f"Read data from MongoDB 'products'. Row count: {df_products.count()}")
+    logger.info(f"Read data from MongoDB '{MONGO_PRODUCTS_COLLECTION}'. Row count: {df_products.count()}")
 
     # Create category_code column efficiently
     df_products = df_products.withColumn(
@@ -130,11 +136,11 @@ try:
         collection_name=COLLECTION_NAME,
         vectors_config={"size": 128, "distance": "Cosine"}  # Match vectorSize
     )
-    logger.info("Qdrant collection created successfully")
+    logger.info(f"Qdrant collection '{COLLECTION_NAME}' created successfully")
 
     # Write to Qdrant with batching
     options = {
-        "qdrant_url": QDRANT_GPRC_URL,
+        "qdrant_url": QDRANT_GRPC_URL,
         "collection_name": COLLECTION_NAME,
         "embedding_field": "vector",
         "schema": df_final.schema.json()

@@ -1,5 +1,8 @@
+# spark_session.py
+
 import os
 from pyspark.sql import SparkSession
+from dotenv import load_dotenv
 
 def create_spark_session(
         app_name="HudiApp",
@@ -12,6 +15,8 @@ def create_spark_session(
     """
     Create and configure a SparkSession with Hudi, S3, MongoDB, and Kafka support.
     """
+    # Load environment variables
+    load_dotenv()
 
     # Define packages
     hudi_package = f"org.apache.hudi:hudi-spark{spark_version}-bundle_2.12:{hudi_version}"
@@ -38,16 +43,16 @@ def create_spark_session(
         .config('spark.executor.extraJavaOptions', '-XX:+UseG1GC') \
         .config('spark.driver.extraJavaOptions', '-XX:+UseG1GC') \
         .config("spark.sql.broadcastTimeout", "6000s") \
-        .config("fs.s3a.endpoint", "http://minio:9000") \
+        .config("fs.s3a.endpoint", os.getenv("S3_ENDPOINT", "http://minio:9000")) \
         .config("fs.s3a.access.key", os.getenv("S3_ACCESS_KEY", "minioadmin")) \
         .config("fs.s3a.secret.key", os.getenv("S3_SECRET_KEY", "minioadmin")) \
         .config("fs.s3a.path.style.access", "true") \
         .config("fs.s3a.connection.ssl.enabled", "false") \
         .config("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
-        .config("spark.mongodb.output.uri", "mongodb://root:example@mongo:27017/recommendation_system?authSource=admin") \
-        .config("spark.jars", "/usr/local/airflow/spark/jars/qdrant-spark-2.3.2.jar") \
-        .config("spark.kafka.bootstrap.servers", "localhost:9092") \
+        .config("spark.mongodb.output.uri", os.getenv("MONGO_ALTERNATE_URI", "mongodb://root:example@mongo:27017/recommendation_system?authSource=admin")) \
+        .config("spark.jars", os.getenv("SPARK_JARS", "/usr/local/airflow/spark/jars/qdrant-spark-2.3.2.jar")) \
+        .config("spark.kafka.bootstrap.servers", os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")) \
         .config("spark.streaming.kafka.maxRatePerPartition", "1000") \
         .config("spark.jars.packages", all_packages) \
         .master("local[*]") 

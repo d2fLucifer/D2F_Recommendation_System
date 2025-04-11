@@ -1,11 +1,19 @@
+# kafka_notify.py
+
 from kafka import KafkaProducer, KafkaAdminClient
 from kafka.admin import NewTopic
 import json
 import sys
 from datetime import datetime
+import os
+from dotenv import load_dotenv
 
-KAFKA_BROKER = "kafka:9092"  
-TOPIC = "model_retrain_event"
+# Load environment variables from .env file
+load_dotenv()
+
+# Constants
+KAFKA_BROKER = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
+TOPIC = os.getenv("KAFKA_RETRAIN_TOPIC")
 
 def create_topic_if_not_exists():
     try:

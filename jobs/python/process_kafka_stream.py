@@ -1,17 +1,28 @@
+# kafka_to_mongo_s3.py
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json, concat_ws
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, TimestampType
 from spark_session import create_spark_session
 import logging
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration constants
-KAFKA_HOST = "kafka:29092"
-TOPIC = "user-behavior-events"
-MONGO_URI = "mongodb://root:example@103.155.161.100:27017/recommendation_system?authSource=admin"
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
+KAFKA_TOPIC = os.getenv("KAFKA_TOPIC")
+MONGO_URI = os.getenv("MONGO_URI")
+MONGO_DATABASE = os.getenv("MONGO_DATABASE")
+MONGO_USERBEHAVIORS_COLLECTION = os.getenv("MONGO_USERBEHAVIORS_COLLECTION")
+MONGO_PRODUCTS_COLLECTION = os.getenv("MONGO_PRODUCTS_COLLECTION")
+S3_PRETRAIN_DATA_PATH = os.getenv("S3_PRETRAIN_DATA_PATH")
 
 # Create Spark session
 spark = create_spark_session(app_name="ProcessKafkaBatch")
@@ -34,8 +45,8 @@ schema = StructType([
 # Read from Kafka
 df = spark.read \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", KAFKA_HOST) \
-    .option("subscribe", TOPIC) \
+    .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
+    .option("subscribe", KAFKA_TOPIC) \
     .option("startingOffsets", "earliest") \
     .option("failOnDataLoss", "false") \
     .load()
@@ -45,12 +56,12 @@ parsed_df = df.select(from_json(col("value").cast("string"), schema).alias("data
 df_userbehaviors = parsed_df
 
 # Write to MongoDB
-logger.info("Writing user behaviors to MongoDB...")
+logger.info(f"Writing user behaviors to MongoDB collection '{MONGO_USERBEHAVIORS_COLLECTION}'...")
 df_userbehaviors.write \
     .format("mongo") \
     .option("uri", MONGO_URI) \
-    .option("database", "recommendation_system") \
-    .option("collection", "userbehaviors") \
+    .option("database", MONGO_DATABASE) \
+    .option("collection", MONGO_USERBEHAVIORS_COLLECTION) \
     .option("partitioner", "MongoSamplePartitioner") \
     .mode("append") \
     .save()
@@ -58,8 +69,8 @@ df_userbehaviors.write \
 # Read products from MongoDB
 df_products = spark.read.format("mongo") \
     .option("uri", MONGO_URI) \
-    .option("database", "recommendation_system") \
-    .option("collection", "products") \
+    .option("database", MONGO_DATABASE) \
+    .option("collection", MONGO_PRODUCTS_COLLECTION) \
     .option("partitioner", "MongoSamplePartitioner") \
     .option("partitionKey", "product_id") \
     .load() \
@@ -87,8 +98,8 @@ df_final = df_userbehaviors.join(
 )
 
 # Write to S3
-logger.info("Writing final data to S3 in CSV format...")
-df_final.write.mode("overwrite").csv("s3a://dataset/pretrain_data/", header=True)
+logger.info(f"Writing final data to S3 at '{S3_PRETRAIN_DATA_PATH}' in CSV format...")
+df_final.write.mode("overwrite").csv(S3_PRETRAIN_DATA_PATH, header=True)
 
 # Stop Spark session
 logger.info("Processing complete. Stopping Spark session...")

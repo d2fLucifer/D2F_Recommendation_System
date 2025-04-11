@@ -11,12 +11,17 @@ from pyspark.ml.linalg import Vectors
 # Standard Python imports
 import logging
 from datetime import datetime
+import os
+from dotenv import load_dotenv
 
 # External library imports
 from qdrant_client import QdrantClient
 
 # Custom imports
 from spark_session import create_spark_session
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,13 +34,14 @@ if __name__ == "__main__":
     logger.info("Spark session created successfully")
 
     # Read data from S3 without immediate caching
+    s3_dataset_path = os.getenv("S3_DATASET_PATH")
     df = spark.read \
         .option("header", "true") \
         .option("mode", "PERMISSIVE") \
         .option("columnNameOfCorruptRecord", "_corrupt_record") \
-        .csv("s3a://dataset/dataset.csv")
+        .csv(s3_dataset_path)
 
-    logger.info("Successfully read CSV file")
+    logger.info(f"Successfully read CSV file from {s3_dataset_path}")
     df.show(5)  # Limit rows for quick inspection
     logger.info(f"Total records: {df.count()}")
 
@@ -89,11 +95,12 @@ if __name__ == "__main__":
     # Verify schema (optional, for debugging)
     df_final.printSchema()
 
-    # Define COLLECTION_NAME
-    COLLECTION_NAME = "combined_vector"
+    # Define COLLECTION_NAME from .env
+    COLLECTION_NAME = os.getenv("QDRANT_COMBINED_VECTOR_COLLECTION")
 
     # Initialize Qdrant client
-    client = QdrantClient(url="http://103.155.161.100:6333")
+    qdrant_url = os.getenv("QDRANT_URL")
+    client = QdrantClient(url=qdrant_url)
 
     # Create Qdrant collection (run only once, ideally outside the script)
     try:
@@ -106,8 +113,9 @@ if __name__ == "__main__":
         logger.error(f"Failed to recreate Qdrant collection: {e}")
 
     # Configure connection options for Qdrant
+    qdrant_grpc_url = os.getenv("QDRANT_GRPC_URL")
     options = {
-        "qdrant_url": "http://103.155.161.100:6334",  # Adjusted to match client URL
+        "qdrant_url": qdrant_grpc_url,  # Use GRPC URL for writing
         "collection_name": COLLECTION_NAME,
         "embedding_field": "vector",
         "schema": df_final.schema.json(),

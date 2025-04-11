@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 x-spark-common: &spark-common
   image: bitnami/spark:3.4.0
@@ -127,7 +127,7 @@ services:
     <<: *airflow-common
     container_name: scheduler
     user: root
-    command: "bash -c \"airflow db migrate && airflow users create --username admin --firstname Yusuf --lastname Ganiyu --role Admin --email airscholar@gmail.com --password admin && airflow scheduler\""
+    command: 'bash -c "airflow db migrate && airflow users create --username admin --firstname Yusuf --lastname Ganiyu --role Admin --email airscholar@gmail.com --password admin && airflow scheduler"'
     networks:
       - shared-network
 
@@ -149,7 +149,7 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
-    command: "minio server /minio_data --console-address \":9001\""
+    command: 'minio server /minio_data --console-address ":9001"'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s

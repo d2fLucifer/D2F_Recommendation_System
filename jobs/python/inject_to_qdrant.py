@@ -1,3 +1,5 @@
+# process_to_qdrant.py
+
 # Core Spark imports
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, udf, monotonically_increasing_id
@@ -8,6 +10,8 @@ from pyspark.ml.feature import Tokenizer, StopWordsRemover
 import logging
 from datetime import datetime
 import numpy as np
+import os
+from dotenv import load_dotenv
 
 # External library imports
 from qdrant_client import QdrantClient
@@ -16,13 +20,16 @@ from fastembed import TextEmbedding
 # Custom imports
 from spark_session import create_spark_session
 
+# Load environment variables from .env file
+load_dotenv()
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
 CHUNK_SIZE = 500000  
-COLLECTION_NAME = "test_v2"
+COLLECTION_NAME = os.getenv("QDRANT_TEST_COLLECTION")
 
 def process_chunk(spark, df_chunk, chunk_id, embedding_model, client, options):
     """Process a single chunk of data and upsert to Qdrant."""
@@ -80,17 +87,18 @@ def main():
     spark = create_spark_session()
 
     # Read CSV file
+    s3_dataset_path = os.getenv("S3_DATASET_PATH")
     df = spark.read \
         .option("header", "true") \
         .option("mode", "PERMISSIVE") \
         .option("columnNameOfCorruptRecord", "_corrupt_record") \
-        .csv("s3a://dataset/dataset.csv")
+        .csv(s3_dataset_path)
     
-    # df= df.limit(10000)
+    # df = df.limit(10000)  # Commented out as in original
 
     df.printSchema()
 
-    logger.info("Successfully read CSV file")
+    logger.info(f"Successfully read CSV file from {s3_dataset_path}")
     total_count = df.count()
     logger.info(f"Total records: {total_count}")
 
@@ -98,7 +106,8 @@ def main():
     embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
     # Initialize Qdrant client
-    client = QdrantClient(url="http://qdrant:6333")
+    qdrant_url = os.getenv("QDRANT_ALTERNATE_URL")
+    client = QdrantClient(url=qdrant_url)
 
     # Create Qdrant collection
     client.recreate_collection(
@@ -121,8 +130,9 @@ def main():
     ])
 
     # Qdrant connection options
+    qdrant_grpc_url = os.getenv("QDRANT_ALTERNATE_GRPC_URL")
     options = {
-        "qdrant_url": "http://qdrant:6334",  #Use GPRC PORT 
+        "qdrant_url": qdrant_grpc_url,  # Use GRPC port
         "collection_name": COLLECTION_NAME,
         "embedding_field": "vector",  # Still specify vector as embedding field
         "schema": qdrant_schema.json(),

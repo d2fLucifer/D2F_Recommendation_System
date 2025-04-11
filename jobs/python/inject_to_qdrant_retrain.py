@@ -10,12 +10,10 @@ from pyspark.sql.types import ArrayType, FloatType, StructType, StructField, Str
 from pyspark.ml.feature import Tokenizer, StopWordsRemover, Word2Vec
 from pyspark import StorageLevel
 from spark_session import create_spark_session
+from dotenv import load_dotenv
 
-
-# Constants
-QDRANT_URL = "http://103.155.161.100:6333"
-QDRANT_GPRC_URL = "http://103.155.161.100:6334"
-COLLECTION_NAME = "recommendation_system"
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -27,8 +25,9 @@ spark = create_spark_session(app_name="QdrantInsert")
 
 try:
     # Read data from S3
-    logger.info("Reading data from S3...")
-    df = spark.read.csv("s3a://dataset/pretrain_data/", header=True)
+    s3_pretrain_data_path = os.getenv("S3_PRETRAIN_DATA_PATH")
+    logger.info(f"Reading data from S3: {s3_pretrain_data_path}...")
+    df = spark.read.csv(s3_pretrain_data_path, header=True)
     df.show(5)
 
     # NLP Feature Engineering with optimized settings
@@ -74,15 +73,17 @@ try:
     df_final.printSchema()
 
     # Qdrant write options
+    qdrant_grpc_url = os.getenv("QDRANT_GRPC_URL")
+    collection_name = os.getenv("QDRANT_RECOMMENDATION_SYSTEM111")
     options = {
-        "qdrant_url": QDRANT_GPRC_URL,
-        "collection_name": COLLECTION_NAME,
+        "qdrant_url": qdrant_grpc_url,
+        "collection_name": collection_name,
         "embedding_field": "vector",
         "schema": df_final.schema.json()
     }
 
     # Write to Qdrant
-    logger.info("Writing data to Qdrant...")
+    logger.info(f"Writing data to Qdrant collection: {collection_name}...")
     df_final.write.format("io.qdrant.spark.Qdrant") \
         .options(**options) \
         .mode("append") \

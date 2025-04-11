@@ -12,8 +12,13 @@ from pyspark.sql.types import ArrayType, FloatType
 from spark_session import create_spark_session
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
-from pyspark.sql.functions import col
 import uuid
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 # Logging Setup
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,18 +28,17 @@ def main():
     spark = create_spark_session()
 
     # MongoDB connection settings
-    MONGO_URI = "mongodb://root:example@mongo:27017/admin"
-    DB_NAME = "recommendation_system" 
-    COLLECTION_NAME = "user_behavior"
+    MONGO_URI = os.getenv("MONGO_ALTERNATE_ADMIN_URI")
+    DB_NAME = os.getenv("MONGO_DATABASE")
+    COLLECTION_NAME = os.getenv("MONGO_USERBEHAVIORS_COLLECTION")
     
-
     # Load Data from MongoDB
     try:
         df = (
             spark.read.format("mongo")
-            .option("uri", mongo_uri)
-            .option("database", db_name)
-            .option("collection", collection_name)
+            .option("uri", MONGO_URI)
+            .option("database", DB_NAME)
+            .option("collection", COLLECTION_NAME)
             .option("inferSchema", "true")  # Auto detect schema
             .load()
         )
@@ -48,10 +52,9 @@ def main():
         spark.stop()
         return
 
-    logger.info("Data loaded from MongoDB:")
+    logger.info(f"Data loaded from MongoDB collection '{COLLECTION_NAME}':")
     df.show(10)
     
-
     # Feature Engineering
     df = df.withColumn("event_time", to_timestamp("event_time", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"))
     df = df.withColumn("view_count", when(col("event_type") == "view", 1).otherwise(0))
@@ -75,7 +78,7 @@ def main():
 
     df_features = df_features.withColumn("F1", when(col("total_views") > 0, col("product_views") / col("total_views")).otherwise(0))
     df_features = df_features.withColumn("F2", when(col("total_carts") > 0, col("product_carts") / col("total_carts")).otherwise(0))
-    df_features = df_features.withColumn("F3", when(col("total_purchases") > 0, col("product_purchases") / col("total_purchases")).otherwise(0))
+    df_features = df_features.withColumn("F3", when(col("total_purchases") > 0, col("product_purchases") /	col("total_purchases")).otherwise(0))
 
     # Time Spent Feature
     window_order = Window.partitionBy("user_session").orderBy("event_time")
@@ -125,29 +128,30 @@ def main():
     df_final = df_final.select("user_id", "product_id", "name", "vector")
     logger.info("Vectorized DataFrame:")
     df_final.show(10, truncate=False)
-    QDRANT_HOST = "qdrant"
-    QDRANT_PORT = 6333
-    COLLECTION_NAME = "user_behaviour"
+
+    # Qdrant connection settings
+    QDRANT_URL = os.getenv("QDRANT_ALTERNATE_URL")
+    QDRANT_GRPC_URL = os.getenv("QDRANT_ALTERNATE_GRPC_URL")
+    QDRANT_COLLECTION_NAME = os.getenv("QDRANT_USER_BEHAVIOUR_COLLECTION")
 
     # Initialize Qdrant client
-    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+    client = QdrantClient(url=QDRANT_URL)
 
     # Ensure collection exists
     client.recreate_collection(
-        collection_name=COLLECTION_NAME,
+        collection_name=QDRANT_COLLECTION_NAME,
         vectors_config={"size": 128, "distance": "Cosine"},  # Adjust size according to word2vec vector size
     )
 
-    
-    ## Step 5: Configure connection options for Qdrant
+    # Configure connection options for Qdrant
     options = {
-        "qdrant_url": "http://qdrant:6334",  # Ensure this is the correct gRPC URL
-        "collection_name": COLLECTION_NAME,
+        "qdrant_url": QDRANT_GRPC_URL,
+        "collection_name": QDRANT_COLLECTION_NAME,
         "schema": df_final.schema.json(),
         "embedding_field": "vector", 
     }
 
-    # Step 6: Write DataFrame to Qdrant
+    # Write DataFrame to Qdrant
     try:
         # Debugging: Print schema and data
         df_final.printSchema()
@@ -157,11 +161,12 @@ def main():
             .options(**options) \
             .mode("append") \
             .save()
-        print("✅ Data successfully inserted into Qdrant.")
+        logger.info("✅ Data successfully inserted into Qdrant.")
     except Exception as e:
-        print(f"❌ Error inserting data into Qdrant: {e}")
+        logger.error(f"❌ Error inserting data into Qdrant: {e}")
+        raise
 
-        # Stop Spark
+    # Stop Spark
     spark.stop()
     logger.info("Spark session stopped.")
 
