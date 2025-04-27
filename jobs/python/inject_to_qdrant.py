@@ -94,7 +94,7 @@ def main():
         .option("columnNameOfCorruptRecord", "_corrupt_record") \
         .csv(s3_dataset_path)
     
-    # df = df.limit(10000)  # Commented out as in original
+    # df = df.limit(100)  # Commented out as in original
 
     df.printSchema()
 
@@ -106,7 +106,7 @@ def main():
     embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
     # Initialize Qdrant client
-    qdrant_url = os.getenv("QDRANT_ALTERNATE_URL")
+    qdrant_url = os.getenv("QDRANT_URL")
     client = QdrantClient(url=qdrant_url)
 
     # Create Qdrant collection
@@ -130,7 +130,7 @@ def main():
     ])
 
     # Qdrant connection options
-    qdrant_grpc_url = os.getenv("QDRANT_ALTERNATE_GRPC_URL")
+    qdrant_grpc_url = os.getenv("QDRANT_GRPC_URL")
     options = {
         "qdrant_url": qdrant_grpc_url,  # Use GRPC port
         "collection_name": COLLECTION_NAME,

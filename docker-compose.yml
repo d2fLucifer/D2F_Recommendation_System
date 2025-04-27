@@ -139,11 +139,11 @@ services:
       MINIO_ROOT_PASSWORD: "minioadmin"
       MINIO_BROWSER_REDIRECT_URL: "http://minio-ui.d2f.io.vn"
       MINIO_REGION: "us-east-1"
-      # Optimize for large uploads
-      MINIO_API_UPLOAD_PART_SIZE: "10737418240" # 10GB per part (max 10,000 parts for 100GB total)
-      MINIO_API_UPLOAD_MAX_SIZE: "107374182400" # 100GB max object size
-      MINIO_MEMORY_LIMIT: "8g"
-      MINIO_DISK_CACHE_SIZE: "0" # Disable disk cache for large uploads
+      MINIO_API_UPLOAD_PART_SIZE: "5368709120" # 5GB
+      MINIO_API_UPLOAD_MAX_SIZE: "107374182400" # 100GB
+      MINIO_MEMORY_LIMIT: "16g"
+      MINIO_DISK_CACHE_SIZE: "0"
+      MINIO_LOG_LEVEL: "debug"
     volumes:
       - minio-data:/minio_data
     ports:
@@ -158,9 +158,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G
+          memory: 16G
         reservations:
-          memory: 2G
+          memory: 4G
     networks:
       - shared-network
 
