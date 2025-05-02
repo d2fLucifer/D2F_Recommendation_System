@@ -251,19 +251,19 @@ services:
     networks:
       - shared-network
 
-  dozzle:
-    container_name: dozzle
-    image: amir20/dozzle:latest
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "2021:8080"
-    environment:
-      DOZZLE_ADDR: ":8080"
-      DOZZLE_LEVEL: "info"
-    restart: unless-stopped
-    networks:
-      - shared-network
+  # dozzle:
+  #   container_name: dozzle
+  #   image: amir20/dozzle:latest
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   ports:
+  #     - "2021:8080"
+  #   environment:
+  #     DOZZLE_ADDR: ":8080"
+  #     DOZZLE_LEVEL: "info"
+  #   restart: unless-stopped
+  #   networks:
+  #     - shared-network
 
   schema-registry:
     image: confluentinc/cp-schema-registry:5.2.1
@@ -290,40 +290,45 @@ services:
     networks:
       - shared-network
 
-  nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile.nginx
-    image: nginx:latest
-    container_name: nginx
-    ports:
-      - "80:80"
-    depends_on:
-      - minio
-      - qdrant
-      - kafka-ui
-      - dozzle
-      - mongo
-    volumes:
-      - ./html:/var/www/html
-    networks:
-      - shared-network
-
+  # nginx:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.nginx
+  #   image: nginx:latest
+  #   container_name: nginx
+  #   ports:
+  #     - "80:80"
+  #   depends_on:
+  #     - minio
+  #     - qdrant
+  #     - kafka-ui
+  #     - dozzle
+  #     - mongo
+  #   volumes:
+  #     - ./html:/var/www/html
+  #   networks:
+  #     - shared-network
 
   kafka-server:
-      build:
-        context: ./kafka
-        dockerfile: Dockerfile
-      container_name: kafka-server
-      depends_on:
-        - kafka
-      volumes:
-        - ./kafka:/app/kafka
-      command: python /app/kafka/kafka.py
-      networks:
-        - shared-network
-
-
+    build:
+      context: ./kafka
+      dockerfile: Dockerfile
+    container_name: kafka-server
+    depends_on:
+      - kafka
+      - qdrant
+    volumes:
+      - ./kafka:/app/kafka
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_TOPIC=user_events
+      - QDRANT_TEST_COLLECTION=test_v2
+      - KAFKA_GROUP_ID=user_events_group
+    networks:
+      - shared-network
+    restart: unless-stopped
 
 volumes:
   postgres-db:
