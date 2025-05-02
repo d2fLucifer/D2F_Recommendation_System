@@ -5,6 +5,10 @@ x-spark-common: &spark-common
   volumes:
     - ./jobs:/opt/bitnami/spark/jobs
     - ./data:/opt/bitnami/spark/data
+    - ./kafka:/opt/bitnami/spark/kafka
+  environment:
+    - PYSPARK_PYTHON=/opt/bitnami/python/bin/python
+    - PYSPARK_DRIVER_PYTHON=/opt/bitnami/python/bin/python
   networks:
     - shared-network
 
@@ -179,12 +183,21 @@ services:
       - ./qdrant_data:/qdrant/storage
     environment:
       QDRANT_LOG_LEVEL: "INFO"
+      QDRANT_SERVICE_ENV: "production"
+      QDRANT_ALLOW_CORS: "true"
+      QDRANT_TELEMETRY_DISABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
     networks:
       - shared-network
 
@@ -231,25 +244,26 @@ services:
       KAFKA_REPLICA_FETCH_MAX_BYTES: "10000000"
       KAFKA_SOCKET_REQUEST_MAX_BYTES: "10000000"
       KAFKA_MAX_PARTITION_FETCH_MAX_BYTES: "10000000"
+      KAFKA_HEAP_OPTS: "-Xmx2G -Xms2G"
     ports:
       - "9092:9092"
       - "29092:29092"
     networks:
       - shared-network
 
-  dozzle:
-    container_name: dozzle
-    image: amir20/dozzle:latest
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "2021:8080"
-    environment:
-      DOZZLE_ADDR: ":8080"
-      DOZZLE_LEVEL: "info"
-    restart: unless-stopped
-    networks:
-      - shared-network
+  # dozzle:
+  #   container_name: dozzle
+  #   image: amir20/dozzle:latest
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   ports:
+  #     - "2021:8080"
+  #   environment:
+  #     DOZZLE_ADDR: ":8080"
+  #     DOZZLE_LEVEL: "info"
+  #   restart: unless-stopped
+  #   networks:
+  #     - shared-network
 
   schema-registry:
     image: confluentinc/cp-schema-registry:5.2.1
@@ -276,24 +290,24 @@ services:
     networks:
       - shared-network
 
-  nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile.nginx
-    image: nginx:latest
-    container_name: nginx
-    ports:
-      - "80:80"
-    depends_on:
-      - minio
-      - qdrant
-      - kafka-ui
-      - dozzle
-      - mongo
-    volumes:
-      - ./html:/var/www/html
-    networks:
-      - shared-network
+  # nginx:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.nginx
+  #   image: nginx:latest
+  #   container_name: nginx
+  #   ports:
+  #     - "80:80"
+  #   depends_on:
+  #     - minio
+  #     - qdrant
+  #     - kafka-ui
+  #     - dozzle
+  #     - mongo
+  #   volumes:
+  #     - ./html:/var/www/html
+  #   networks:
+  #     - shared-network
 
 volumes:
   postgres-db:
