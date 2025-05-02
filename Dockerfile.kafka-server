@@ -1,0 +1,12 @@
+FROM python:3.9-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install required packages
+COPY ./kafka/requirements.txt /app/kafka/requirements.txt
+RUN pip install --upgrade pip && \
+    pip install -r /app/kafka/requirements.txt
+
+# Copy kafka source (already mounted via volumes in docker-compose)
+# ENTRYPOINT defined in docker-compose with "command"
