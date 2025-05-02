@@ -251,19 +251,19 @@ services:
     networks:
       - shared-network
 
-  # dozzle:
-  #   container_name: dozzle
-  #   image: amir20/dozzle:latest
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #   ports:
-  #     - "2021:8080"
-  #   environment:
-  #     DOZZLE_ADDR: ":8080"
-  #     DOZZLE_LEVEL: "info"
-  #   restart: unless-stopped
-  #   networks:
-  #     - shared-network
+  dozzle:
+    container_name: dozzle
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "2021:8080"
+    environment:
+      DOZZLE_ADDR: ":8080"
+      DOZZLE_LEVEL: "info"
+    restart: unless-stopped
+    networks:
+      - shared-network
 
   schema-registry:
     image: confluentinc/cp-schema-registry:5.2.1
@@ -290,24 +290,24 @@ services:
     networks:
       - shared-network
 
-  # nginx:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.nginx
-  #   image: nginx:latest
-  #   container_name: nginx
-  #   ports:
-  #     - "80:80"
-  #   depends_on:
-  #     - minio
-  #     - qdrant
-  #     - kafka-ui
-  #     - dozzle
-  #     - mongo
-  #   volumes:
-  #     - ./html:/var/www/html
-  #   networks:
-  #     - shared-network
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - minio
+      - qdrant
+      - kafka-ui
+      - dozzle
+      - mongo
+    volumes:
+      - ./html:/var/www/html
+    networks:
+      - shared-network
 
   kafka-server:
     build:
