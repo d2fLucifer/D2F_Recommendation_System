@@ -7,6 +7,14 @@ from datetime import datetime
 import time
 import os
 from dotenv import load_dotenv
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -19,56 +27,53 @@ KAFKA_TOPIC = os.getenv('KAFKA_TOPIC', 'user_events')
 COLLECTION_NAME = os.getenv('QDRANT_TEST_COLLECTION', 'test_v2')
 KAFKA_GROUP_ID = os.getenv('KAFKA_GROUP_ID', 'user_events_group')
 
-# Initialize Qdrant client with specific configuration
-qdrant_client = QdrantClient(
-    host=QDRANT_HOST,
-    port=QDRANT_PORT,
-    prefer_grpc=True  # Use gRPC for better performance
-)
-
-# Initialize FastEmbed for text embedding
-embedding_model = TextEmbedding()
-
-# Create collection in Qdrant if it doesn't exist
-VECTOR_SIZE = 384  # FastEmbed default vector size
-
+# Initialize FastEmbed with BAAI/bge-small-en-v1.5
 try:
-    # Try to get the collection first
-    collection_info = qdrant_client.get_collection(COLLECTION_NAME)
-    print(f"Collection {COLLECTION_NAME} already exists")
+    logger.info("Initializing FastEmbed model...")
+    embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+    logger.info("FastEmbed model initialized successfully")
 except Exception as e:
-    if f"Collection `{COLLECTION_NAME}` already exists" in str(e):
-        print(f"Collection {COLLECTION_NAME} already exists")
-    else:
-        print(f"Creating collection {COLLECTION_NAME}")
-        try:
-            qdrant_client.create_collection(
-                collection_name=COLLECTION_NAME,
-                vectors_config=models.VectorParams(
-                    size=VECTOR_SIZE,
-                    distance=models.Distance.COSINE
-                ),
-                optimizers_config=models.OptimizersConfigDiff(
-                    max_optimization_threads=4
-                )
-            )
-        except Exception as create_error:
-            if f"Collection `{COLLECTION_NAME}` already exists" not in str(create_error):
-                print(f"Error creating collection: {create_error}")
-                raise
+    logger.error(f"Failed to initialize FastEmbed model: {e}")
+    raise
+
+# Initialize Qdrant client
+try:
+    logger.info(f"Connecting to Qdrant at {QDRANT_HOST}:{QDRANT_PORT}...")
+    qdrant_client = QdrantClient(
+        host=QDRANT_HOST,
+        port=QDRANT_PORT,
+        prefer_grpc=True
+    )
+    logger.info("Successfully connected to Qdrant")
+except Exception as e:
+    logger.error(f"Failed to connect to Qdrant: {e}")
+    raise
+
+
 
 def vectorize_text(text: str) -> list:
-    """Convert text to vector using FastEmbed"""
-    embeddings = list(embedding_model.embed([text]))
-    return embeddings[0].tolist()
+    """Convert text to vector using FastEmbed and truncate to 128 dimensions"""
+    try:
+        embeddings = list(embedding_model.embed([text]))
+        # Truncate to the first 128 dimensions
+        vector = embeddings[0][:128].tolist()
+        if len(vector) != 128:
+            logger.error(f"Truncated vector has incorrect dimension: {len(vector)}")
+            raise ValueError("Vector dimension error after truncation")
+        logger.info(f"Generated vector with dimension: {len(vector)}")
+        return vector
+    except Exception as e:
+        logger.error(f"Error in vectorization: {e}")
+        raise
 
 def process_message(message):
     """Process a single Kafka message and store it in Qdrant"""
     try:
         # Parse the message value
         data = json.loads(message.value.decode('utf-8'))
+        logger.info(f"Processing message: {data}")
         
-        # Create text for embedding (combine relevant fields)
+        # Create text for embedding
         text_to_embed = f"{data.get('name', '')} {data.get('event_type', '')}"
         
         # Generate vector
@@ -97,33 +102,75 @@ def process_message(message):
             points=[point]
         )
         
-        print(f"Processed message: {data}")
+        logger.info(f"Successfully processed message: {data}")
     except Exception as e:
-        print(f"Error processing message: {e}")
+        logger.error(f"Error processing message: {e}")
+        raise
 
 def main():
-    print("Starting Kafka consumer...")
-    print(f"Configuration:")
-    print(f"- Qdrant: {QDRANT_HOST}:{QDRANT_PORT}")
-    print(f"- Kafka: {KAFKA_BOOTSTRAP_SERVERS}")
-    print(f"- Topic: {KAFKA_TOPIC}")
-    print(f"- Collection: {COLLECTION_NAME}")
-    print(f"- Group ID: {KAFKA_GROUP_ID}")
+    logger.info("Starting Kafka consumer...")
+    logger.info(f"Configuration:")
+    logger.info(f"- Qdrant: {QDRANT_HOST}:{QDRANT_PORT}")
+    logger.info(f"- Kafka: {KAFKA_BOOTSTRAP_SERVERS}")
+    logger.info(f"- Topic: {KAFKA_TOPIC}")
+    logger.info(f"- Collection: {COLLECTION_NAME}")
+    logger.info(f"- Group ID: {KAFKA_GROUP_ID}")
     
     # Initialize Kafka consumer
-    consumer = KafkaConsumer(
-        KAFKA_TOPIC,
-        bootstrap_servers=[KAFKA_BOOTSTRAP_SERVERS],
-        auto_offset_reset='latest',
-        enable_auto_commit=True,
-        group_id=KAFKA_GROUP_ID
-    )
-    
-    print("Kafka consumer initialized. Waiting for messages...")
+    try:
+        consumer = KafkaConsumer(
+            KAFKA_TOPIC,
+            bootstrap_servers=[KAFKA_BOOTSTRAP_SERVERS],
+            auto_offset_reset='earliest',
+            enable_auto_commit=False,
+            group_id=KAFKA_GROUP_ID,
+            consumer_timeout_ms=None,
+            max_poll_records=100,
+            max_poll_interval_ms=300000,
+            session_timeout_ms=10000,
+            heartbeat_interval_ms=3000,
+            request_timeout_ms=30000,
+            retry_backoff_ms=1000,
+            fetch_max_wait_ms=500,
+            fetch_min_bytes=1,
+            fetch_max_bytes=52428800
+        )
+        logger.info("Kafka consumer initialized. Waiting for messages...")
+    except Exception as e:
+        logger.error(f"Failed to initialize Kafka consumer: {e}")
+        raise
     
     # Process messages
-    for message in consumer:
-        process_message(message)
+    try:
+        while True:
+            try:
+                messages = consumer.poll(timeout_ms=1000)
+                
+                if not messages:
+                    continue
+                
+                for topic_partition, msgs in messages.items():
+                    for message in msgs:
+                        try:
+                            if message is None or message.value is None:
+                                logger.warning("Received None message, skipping...")
+                                continue
+                                
+                            process_message(message)
+                            consumer.commit()
+                        except Exception as e:
+                            logger.error(f"Error processing individual message: {e}")
+                            continue
+                
+            except Exception as e:
+                logger.error(f"Error in message processing loop: {e}")
+                time.sleep(5)
+                continue
+    except KeyboardInterrupt:
+        logger.info("Received shutdown signal")
+    finally:
+        consumer.close()
+        logger.info("Kafka consumer closed")
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.9
 
 # Install necessary system packages
 RUN apt-get update && \
@@ -21,6 +21,10 @@ COPY . .
 
 # Convert entrypoint script line endings and make it executable
 RUN dos2unix entrypoint.sh && chmod +x entrypoint.sh
+
+# Set environment variables for memory optimization
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # Set entrypoint
 ENTRYPOINT ["/bin/bash", "/app/kafka/entrypoint.sh"]
